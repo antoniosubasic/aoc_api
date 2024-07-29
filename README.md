@@ -1,7 +1,7 @@
 [![Version](https://img.shields.io/crates/v/aoc_api)](https://crates.io/crates/aoc_api)
 [![Downloads](https://img.shields.io/crates/d/aoc_api)](https://crates.io/crates/aoc_api)
 
-a simple [Advent of Code](https://adventofcode.com) API
+a simple [Advent of Code](https://adventofcode.com) API written in Rust - also checkout the [C# version](https://github.com/antoniosubasic/AoC.API)
 
 ## Documentation
 
