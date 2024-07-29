@@ -1,0 +1,18 @@
+[package]
+name = "aoc_api"
+version = "1.0.0"
+edition = "2021"
+authors = ["Antonio Subašić <antonio@subasic.me>"]
+description = "a simple Advent of Code API"
+repository = "https://github.com/antoniosubasic/aoc_api"
+license = "GPL-3.0"
+keywords = ["AoC", "Advent-of-Code", "API"]
+readme = "README.md"
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+regex = "1.10.5"
+reqwest = { version = "0.12.5", features = ["json", "cookies"] }
+tokio = { version = "1.39.2", features = ["full"] }
