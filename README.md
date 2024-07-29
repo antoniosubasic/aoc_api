@@ -1,5 +1,5 @@
 [![Version](https://img.shields.io/crates/v/aoc_api)](https://crates.io/crates/aoc_api)
-[![Downloads](https://img.shields.io/crates/dv/aoc_api?label=Downloads)](https://crates.io/crates/aoc_api)
+[![Downloads](https://img.shields.io/crates/d/aoc_api)](https://crates.io/crates/aoc_api)
 
 a simple [Advent of Code](https://adventofcode.com) API
 
