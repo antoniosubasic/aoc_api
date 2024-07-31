@@ -1,0 +1,46 @@
+name: Build ⚒️ and Publish 🚀
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build ⚒️
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code 🛎️
+        uses: actions/checkout@v2
+
+      - name: Setup Rust 🦀
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Format Code 🧹
+        run: cargo fmt --all
+
+      - name: Build 🛠️
+        run: cargo build --release
+
+  publish:
+    name: Publish 🚀
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && success()
+
+    steps:
+      - name: Checkout code 🛎️
+        uses: actions/checkout@v2
+
+      - name: Setup Rust 🦀
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Publish crate 🚀
+        run: cargo publish --token ${{ secrets.CRATES_API_TOKEN }}

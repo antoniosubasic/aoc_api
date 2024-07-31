@@ -84,7 +84,7 @@ impl Session {
                 .trim_end_matches("\n")
                 .to_string())
         } else {
-            Err("sample could not be found".into())
+            Err("sample could not be retrieved".into())
         }
     }
 
@@ -157,7 +157,9 @@ impl Session {
                 success: Some(true),
                 cooldown: None,
             })
-        } else if response.contains("Did you already complete it?") || response.contains("Both parts of this puzzle are complete!") {
+        } else if response.contains("Did you already complete it?")
+            || response.contains("Both parts of this puzzle are complete!")
+        {
             let day_response_uri =
                 format!("https://adventofcode.com/{}/day/{}", self.year, self.day);
             let day_response = self
@@ -171,7 +173,7 @@ impl Session {
             if matches.len() >= part as usize {
                 let correct_answer = matches[(part - 1) as usize]
                     .name("answer")
-                    .ok_or("answer could not be found")?
+                    .ok_or("answer could not be retrieved")?
                     .as_str();
 
                 Ok(Response {
@@ -179,17 +181,17 @@ impl Session {
                     cooldown: None,
                 })
             } else {
-                Err("answer could not be found".into())
+                Err("answer could not be retrieved".into())
             }
         } else if response.contains("You gave an answer too recently") {
             let re = Regex::new(r"You have (?<time>.*?) left to wait").unwrap();
             let capture = re
                 .captures(&response)
-                .ok_or("cooldown time could not be found")?;
+                .ok_or("cooldown time could not be retrieved")?;
 
             let time = capture
                 .name("time")
-                .ok_or("cooldown time could not be found")?
+                .ok_or("cooldown time could not be retrieved")?
                 .as_str();
 
             Ok(Response {
@@ -200,19 +202,24 @@ impl Session {
             || response.contains("before trying again.")
         {
             let re = Regex::new(r"wait (?<time>.*?) before trying again").unwrap();
-            let capture = re
-                .captures(&response)
-                .ok_or("cooldown time could not be found")?;
+            let capture = re.captures(&response);
 
-            let time = capture
-                .name("time")
-                .ok_or("cooldown time could not be found")?
-                .as_str();
+            if let Some(capture) = capture {
+                let time = capture
+                    .name("time")
+                    .ok_or("cooldown time could not be retrieved")?
+                    .as_str();
 
-            Ok(Response {
-                success: Some(false),
-                cooldown: Some(time.to_string()),
-            })
+                Ok(Response {
+                    success: Some(false),
+                    cooldown: Some(time.to_string()),
+                })
+            } else {
+                Ok(Response {
+                    success: Some(false),
+                    cooldown: None,
+                })
+            }
         } else {
             Err("unknown response".into())
         }
