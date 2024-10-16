@@ -30,7 +30,6 @@ jobs:
     name: Publish 🚀
     needs: build
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && success()
 
     steps:
       - name: Checkout code 🛎️
