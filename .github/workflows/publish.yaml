@@ -1,4 +1,4 @@
-name: Build ⚒️ and Publish 🚀
+name: Build 🛠️ and Publish 🚀
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build ⚒️
+    name: Build 🛠️
     runs-on: ubuntu-latest
 
     steps:
