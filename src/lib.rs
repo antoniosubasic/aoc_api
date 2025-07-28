@@ -143,7 +143,7 @@ impl Session {
         Ok(stars_map)
     }
 
-    pub async fn submit_anwer(&self, part: u8, answer: &str) -> Result<Response, Box<dyn Error>> {
+    pub async fn submit_answer(&self, part: u8, answer: &str) -> Result<Response, Box<dyn Error>> {
         let uri = format!(
             "https://adventofcode.com/{}/day/{}/answer",
             self.year, self.day
@@ -340,10 +340,10 @@ mod tests {
 
         let session = Session::new(cookie, year, day);
 
-        let response = session.submit_anwer(1, "test").await.unwrap();
+        let response = session.submit_answer(1, "test").await.unwrap();
         assert_eq!(response.success, Some(false));
 
-        let response = session.submit_anwer(2, "261342720").await.unwrap();
+        let response = session.submit_answer(2, "261342720").await.unwrap();
         assert_eq!(response.success, Some(true));
     }
 }
