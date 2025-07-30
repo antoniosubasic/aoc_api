@@ -1,6 +1,6 @@
 [package]
 name = "aoc_api"
-version = "2.1.0"
+version = "3.0.0"
 edition = "2021"
 authors = ["Antonio Subašić <antonio.subasic.public@gmail.com>"]
 description = "a simple Advent of Code API"
