@@ -116,6 +116,9 @@ pub async fn get_all_stars(cookie: &str) -> Result<HashMap<u16, u8>, Box<dyn Err
     Ok(stars_map)
 }
 
+#[deprecated(
+    note = "This function is deprecated and will be removed in the future. Please use submit_answer_explicit_error instead."
+)]
 pub async fn submit_answer(
     cookie: &str,
     year: u16,
@@ -196,6 +199,81 @@ pub async fn submit_answer(
     }
 }
 
+pub async fn submit_answer_explicit_error(
+    cookie: &str,
+    year: u16,
+    day: u8,
+    part: u8,
+    answer: &str,
+) -> Result<bool, SubmitAnswerError> {
+    let uri = format!("https://adventofcode.com/{}/day/{}/answer", year, day);
+    let content = format!("level={}&answer={}", part, answer);
+    let response = send_request(cookie, Method::POST, &uri, Some(content))
+        .await
+        .map_err(|e| SubmitAnswerError::Other(e.to_string()))?;
+
+    if response.contains("That's the right answer!") {
+        Ok(true)
+    } else if response.contains("Did you already complete it?")
+        || response.contains("Both parts of this puzzle are complete!")
+    {
+        let day_response_uri = format!("https://adventofcode.com/{}/day/{}", year, day);
+        let day_response = send_request(cookie, Method::GET, &day_response_uri, None)
+            .await
+            .map_err(|e| SubmitAnswerError::Other(e.to_string()))?;
+
+        let re = Regex::new(r"<p>Your puzzle answer was <code>(?<answer>.*?)</code>.</p>").unwrap();
+        let matches = re.captures_iter(&day_response).collect::<Vec<_>>();
+
+        if matches.len() >= part as usize {
+            let correct_answer = matches[(part - 1) as usize]
+                .name("answer")
+                .ok_or_else(|| {
+                    SubmitAnswerError::Other("answer could not be retrieved".to_string())
+                })?
+                .as_str();
+            Ok(correct_answer == answer)
+        } else {
+            Err(SubmitAnswerError::Other(
+                "answer could not be retrieved".to_string(),
+            ))
+        }
+    } else if response.contains("You gave an answer too recently") {
+        let re = Regex::new(r"You have (?<time>.*?) left to wait").unwrap();
+        let capture = re.captures(&response).ok_or_else(|| {
+            SubmitAnswerError::Other("cooldown time could not be retrieved".to_string())
+        })?;
+
+        let time = capture
+            .name("time")
+            .ok_or_else(|| {
+                SubmitAnswerError::Other("cooldown time could not be retrieved".to_string())
+            })?
+            .as_str();
+
+        Err(SubmitAnswerError::Cooldown(time.to_string()))
+    } else if response.contains("That's not the right answer.")
+        || response.contains("before trying again.")
+    {
+        let re = Regex::new(r"wait (?<time>.*?) before trying again").unwrap();
+        let capture = re.captures(&response);
+
+        if let Some(capture) = capture {
+            let time = capture
+                .name("time")
+                .ok_or_else(|| {
+                    SubmitAnswerError::Other("cooldown time could not be retrieved".to_string())
+                })?
+                .as_str();
+            Err(SubmitAnswerError::Cooldown(time.to_string()))
+        } else {
+            Ok(false)
+        }
+    } else {
+        Err(SubmitAnswerError::Unknown("unknown response".to_string()))
+    }
+}
+
 pub struct Session {
     cookie: String,
     year: u16,
@@ -246,11 +324,23 @@ impl Session {
         get_all_stars(&self.cookie).await
     }
 
+    #[deprecated(
+        note = "This function is deprecated and will be removed in the future. Please use submit_answer_explicit_error instead."
+    )]
     pub async fn submit_answer(&self, part: u8, answer: &str) -> Result<Response, Box<dyn Error>> {
         submit_answer(&self.cookie, self.year, self.day, part, answer).await
     }
+
+    pub async fn submit_answer_explicit_error(
+        &self,
+        part: u8,
+        answer: &str,
+    ) -> Result<bool, SubmitAnswerError> {
+        submit_answer_explicit_error(&self.cookie, self.year, self.day, part, answer).await
+    }
 }
 
+#[deprecated(note = "This struct is deprecated and will be removed in the future.")]
 pub struct Response {
     pub success: Option<bool>,
     pub cooldown: Option<String>,
@@ -271,6 +361,25 @@ impl fmt::Display for Response {
         write!(f, "{success_str}{seperator}{cooldown_str}")
     }
 }
+
+#[derive(Debug)]
+pub enum SubmitAnswerError {
+    Cooldown(String),
+    Unknown(String),
+    Other(String),
+}
+
+impl fmt::Display for SubmitAnswerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SubmitAnswerError::Cooldown(msg) => write!(f, "on cooldown: {}", msg),
+            SubmitAnswerError::Unknown(msg) => write!(f, "unknown error: {}", msg),
+            SubmitAnswerError::Other(msg) => write!(f, "{}", msg),
+        }
+    }
+}
+
+impl Error for SubmitAnswerError {}
 
 #[cfg(test)]
 mod tests {
@@ -370,5 +479,26 @@ mod tests {
 
         let response = session.submit_answer(2, "261342720").await.unwrap();
         assert_eq!(response.success, Some(true));
+    }
+
+    #[tokio::test]
+    async fn test_session_submit_answer_explicit_error() {
+        let cookie = String::from(SESSION_COOKIE);
+        let year = 2020;
+        let day = 1;
+
+        let session = Session::new(cookie, year, day);
+
+        let response = session
+            .submit_answer_explicit_error(1, "test")
+            .await
+            .unwrap();
+        assert_eq!(response, false);
+
+        let response = session
+            .submit_answer_explicit_error(2, "261342720")
+            .await
+            .unwrap();
+        assert_eq!(response, true);
     }
 }
