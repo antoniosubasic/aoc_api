@@ -8,8 +8,195 @@ use std::error::Error;
 #[cfg(test)]
 const SESSION_COOKIE: &str = ""; // add cookie here
 
+async fn send_request(
+    cookie: &str,
+    method: Method,
+    uri: &str,
+    content: Option<String>,
+) -> Result<String, Box<dyn Error>> {
+    let mut headers = HeaderMap::new();
+    headers.insert(COOKIE, format!("session={}", cookie).parse()?);
+
+    let request = Client::new().request(method, uri).headers(headers);
+
+    let request = match content {
+        Some(content) => request.body(content),
+        None => request,
+    };
+
+    let response = request.send().await?;
+
+    match response.status().is_success() {
+        true => Ok(response.text().await?),
+        false => Err(format!("request failed: {}", response.status()).into()),
+    }
+}
+
+pub async fn get_sample_input_text(
+    cookie: &str,
+    year: u16,
+    day: u8,
+    nth: u8,
+) -> Result<String, Box<dyn Error>> {
+    let uri = format!("https://adventofcode.com/{}/day/{}", year, day);
+    let response = send_request(cookie, Method::GET, &uri, None).await?;
+
+    let re = Regex::new(r"<pre><code>(?<sample>(.*?\n)*?)<\/code><\/pre>").unwrap();
+    let matches = re.captures_iter(&response).collect::<Vec<_>>();
+
+    if matches.len() >= nth as usize {
+        Ok(matches[(nth - 1) as usize]
+            .name("sample")
+            .ok_or("no sample match")?
+            .as_str()
+            .trim_end_matches("\n")
+            .to_string())
+    } else {
+        Err("sample could not be retrieved".into())
+    }
+}
+
+pub async fn get_sample_input_lines(
+    cookie: &str,
+    year: u16,
+    day: u8,
+    nth: u8,
+) -> Result<Vec<String>, Box<dyn Error>> {
+    let text = get_sample_input_text(cookie, year, day, nth).await?;
+    Ok(text.lines().map(|line| line.to_string()).collect())
+}
+
+pub async fn get_input_text(cookie: &str, year: u16, day: u8) -> Result<String, Box<dyn Error>> {
+    let uri = format!("https://adventofcode.com/{}/day/{}/input", year, day);
+    let response = send_request(cookie, Method::GET, &uri, None).await?;
+    Ok(response.trim_end_matches('\n').to_string())
+}
+
+pub async fn get_input_lines(
+    cookie: &str,
+    year: u16,
+    day: u8,
+) -> Result<Vec<String>, Box<dyn Error>> {
+    let text = get_input_text(cookie, year, day).await?;
+    Ok(text.lines().map(|line| line.to_string()).collect())
+}
+
+pub async fn get_all_stars(cookie: &str) -> Result<HashMap<u16, u8>, Box<dyn Error>> {
+    let response: Vec<String> =
+        send_request(cookie, Method::GET, "https://adventofcode.com/events", None)
+            .await?
+            .lines()
+            .filter(|line| line.starts_with("<div class=\"eventlist-event\">"))
+            .map(|line| line.to_string())
+            .collect();
+
+    let stars_map = response
+        .iter()
+        .map(|line| {
+            let year_index = line.find("</a>").unwrap() as i16 - 5;
+            let star_index = line.find("</span>").unwrap_or(0) as i16 - 3;
+
+            let year = line[(year_index as usize)..(year_index as usize + 4)]
+                .parse::<u16>()
+                .unwrap();
+
+            let stars = if star_index < 0 {
+                0
+            } else {
+                line[(star_index as usize)..(star_index as usize + 2)]
+                    .trim()
+                    .parse::<u8>()
+                    .unwrap()
+            };
+
+            (year, stars)
+        })
+        .collect();
+
+    Ok(stars_map)
+}
+
+pub async fn submit_answer(
+    cookie: &str,
+    year: u16,
+    day: u8,
+    part: u8,
+    answer: &str,
+) -> Result<Response, Box<dyn Error>> {
+    let uri = format!("https://adventofcode.com/{}/day/{}/answer", year, day);
+    let content = format!("level={}&answer={}", part, answer);
+    let response = send_request(cookie, Method::POST, &uri, Some(content)).await?;
+
+    if response.contains("That's the right answer!") {
+        Ok(Response {
+            success: Some(true),
+            cooldown: None,
+        })
+    } else if response.contains("Did you already complete it?")
+        || response.contains("Both parts of this puzzle are complete!")
+    {
+        let day_response_uri = format!("https://adventofcode.com/{}/day/{}", year, day);
+        let day_response = send_request(cookie, Method::GET, &day_response_uri, None).await?;
+
+        let re = Regex::new(r"<p>Your puzzle answer was <code>(?<answer>.*?)</code>.</p>").unwrap();
+        let matches = re.captures_iter(&day_response).collect::<Vec<_>>();
+
+        if matches.len() >= part as usize {
+            let correct_answer = matches[(part - 1) as usize]
+                .name("answer")
+                .ok_or("answer could not be retrieved")?
+                .as_str();
+
+            Ok(Response {
+                success: Some(correct_answer == answer),
+                cooldown: None,
+            })
+        } else {
+            Err("answer could not be retrieved".into())
+        }
+    } else if response.contains("You gave an answer too recently") {
+        let re = Regex::new(r"You have (?<time>.*?) left to wait").unwrap();
+        let capture = re
+            .captures(&response)
+            .ok_or("cooldown time could not be retrieved")?;
+
+        let time = capture
+            .name("time")
+            .ok_or("cooldown time could not be retrieved")?
+            .as_str();
+
+        Ok(Response {
+            success: None,
+            cooldown: Some(time.to_string()),
+        })
+    } else if response.contains("That's not the right answer.")
+        || response.contains("before trying again.")
+    {
+        let re = Regex::new(r"wait (?<time>.*?) before trying again").unwrap();
+        let capture = re.captures(&response);
+
+        if let Some(capture) = capture {
+            let time = capture
+                .name("time")
+                .ok_or("cooldown time could not be retrieved")?
+                .as_str();
+
+            Ok(Response {
+                success: Some(false),
+                cooldown: Some(time.to_string()),
+            })
+        } else {
+            Ok(Response {
+                success: Some(false),
+                cooldown: None,
+            })
+        }
+    } else {
+        Err("unknown response".into())
+    }
+}
+
 pub struct Session {
-    client: Client,
     cookie: String,
     year: u16,
     day: u8,
@@ -17,12 +204,7 @@ pub struct Session {
 
 impl Session {
     pub fn new(cookie: String, year: u16, day: u8) -> Self {
-        Self {
-            client: Client::new(),
-            cookie,
-            year,
-            day,
-        }
+        Self { cookie, year, day }
     }
 
     pub fn from_pattern(cookie: String, input: String, pattern: Regex) -> Result<Self, String> {
@@ -44,185 +226,28 @@ impl Session {
         Ok(Self::new(cookie, year, day))
     }
 
-    async fn send_request(
-        &self,
-        method: Method,
-        uri: &str,
-        content: Option<String>,
-    ) -> Result<String, Box<dyn Error>> {
-        let mut headers = HeaderMap::new();
-        headers.insert(COOKIE, format!("session={}", self.cookie).parse()?);
-
-        let request = self.client.request(method, uri).headers(headers);
-
-        let request = match content {
-            Some(content) => request.body(content),
-            None => request,
-        };
-
-        let response = request.send().await?;
-
-        match response.status().is_success() {
-            true => Ok(response.text().await?),
-            false => Err(format!("request failed: {}", response.status()).into()),
-        }
-    }
-
     pub async fn get_sample_input_text(&self, nth: u8) -> Result<String, Box<dyn Error>> {
-        let uri = format!("https://adventofcode.com/{}/day/{}", self.year, self.day);
-
-        let response = self.send_request(Method::GET, &uri, None).await?;
-
-        let re = Regex::new(r"<pre><code>(?<sample>(.*?\n)*?)<\/code><\/pre>").unwrap();
-        let matches = re.captures_iter(&response).collect::<Vec<_>>();
-
-        if matches.len() >= nth as usize {
-            Ok(matches[(nth - 1) as usize]
-                .name("sample")
-                .ok_or("no sample match")?
-                .as_str()
-                .trim_end_matches("\n")
-                .to_string())
-        } else {
-            Err("sample could not be retrieved".into())
-        }
+        get_sample_input_text(&self.cookie, self.year, self.day, nth).await
     }
 
     pub async fn get_sample_input_lines(&self, nth: u8) -> Result<Vec<String>, Box<dyn Error>> {
-        let text = self.get_sample_input_text(nth).await?;
-        Ok(text.lines().map(|line| line.to_string()).collect())
+        get_sample_input_lines(&self.cookie, self.year, self.day, nth).await
     }
 
     pub async fn get_input_text(&self) -> Result<String, Box<dyn Error>> {
-        let uri = format!(
-            "https://adventofcode.com/{}/day/{}/input",
-            self.year, self.day
-        );
-
-        let response = self.send_request(Method::GET, &uri, None).await?;
-        Ok(response.trim_end_matches('\n').to_string())
+        get_input_text(&self.cookie, self.year, self.day).await
     }
 
     pub async fn get_input_lines(&self) -> Result<Vec<String>, Box<dyn Error>> {
-        let text = self.get_input_text().await?;
-        Ok(text.lines().map(|line| line.to_string()).collect())
+        get_input_lines(&self.cookie, self.year, self.day).await
     }
 
     pub async fn get_all_stars(&self) -> Result<HashMap<u16, u8>, Box<dyn Error>> {
-        let response: Vec<String> = self
-            .send_request(Method::GET, "https://adventofcode.com/events", None)
-            .await?
-            .lines()
-            .filter(|line| line.starts_with("<div class=\"eventlist-event\">"))
-            .map(|line| line.to_string())
-            .collect();
-
-        let stars_map = response
-            .iter()
-            .map(|line| {
-                let year_index = line.find("</a>").unwrap() as i16 - 5;
-                let star_index = line.find("</span>").unwrap_or(0) as i16 - 3;
-
-                let year = line[(year_index as usize)..(year_index as usize + 4)]
-                    .parse::<u16>()
-                    .unwrap();
-
-                let stars = if star_index < 0 {
-                    0
-                } else {
-                    line[(star_index as usize)..(star_index as usize + 2)]
-                        .trim()
-                        .parse::<u8>()
-                        .unwrap()
-                };
-
-                (year, stars)
-            })
-            .collect();
-
-        Ok(stars_map)
+        get_all_stars(&self.cookie).await
     }
 
     pub async fn submit_answer(&self, part: u8, answer: &str) -> Result<Response, Box<dyn Error>> {
-        let uri = format!(
-            "https://adventofcode.com/{}/day/{}/answer",
-            self.year, self.day
-        );
-        let content = format!("level={}&answer={}", part, answer);
-
-        let response = self.send_request(Method::POST, &uri, Some(content)).await?;
-
-        if response.contains("That's the right answer!") {
-            Ok(Response {
-                success: Some(true),
-                cooldown: None,
-            })
-        } else if response.contains("Did you already complete it?")
-            || response.contains("Both parts of this puzzle are complete!")
-        {
-            let day_response_uri =
-                format!("https://adventofcode.com/{}/day/{}", self.year, self.day);
-            let day_response = self
-                .send_request(Method::GET, &day_response_uri, None)
-                .await?;
-
-            let re =
-                Regex::new(r"<p>Your puzzle answer was <code>(?<answer>.*?)</code>.</p>").unwrap();
-            let matches = re.captures_iter(&day_response).collect::<Vec<_>>();
-
-            if matches.len() >= part as usize {
-                let correct_answer = matches[(part - 1) as usize]
-                    .name("answer")
-                    .ok_or("answer could not be retrieved")?
-                    .as_str();
-
-                Ok(Response {
-                    success: Some(correct_answer == answer),
-                    cooldown: None,
-                })
-            } else {
-                Err("answer could not be retrieved".into())
-            }
-        } else if response.contains("You gave an answer too recently") {
-            let re = Regex::new(r"You have (?<time>.*?) left to wait").unwrap();
-            let capture = re
-                .captures(&response)
-                .ok_or("cooldown time could not be retrieved")?;
-
-            let time = capture
-                .name("time")
-                .ok_or("cooldown time could not be retrieved")?
-                .as_str();
-
-            Ok(Response {
-                success: None,
-                cooldown: Some(time.to_string()),
-            })
-        } else if response.contains("That's not the right answer.")
-            || response.contains("before trying again.")
-        {
-            let re = Regex::new(r"wait (?<time>.*?) before trying again").unwrap();
-            let capture = re.captures(&response);
-
-            if let Some(capture) = capture {
-                let time = capture
-                    .name("time")
-                    .ok_or("cooldown time could not be retrieved")?
-                    .as_str();
-
-                Ok(Response {
-                    success: Some(false),
-                    cooldown: Some(time.to_string()),
-                })
-            } else {
-                Ok(Response {
-                    success: Some(false),
-                    cooldown: None,
-                })
-            }
-        } else {
-            Err("unknown response".into())
-        }
+        submit_answer(&self.cookie, self.year, self.day, part, answer).await
     }
 }
 
