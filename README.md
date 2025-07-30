@@ -6,6 +6,7 @@ a simple [Advent of Code](https://adventofcode.com) API written in Rust - also c
 ## Documentation
 
 - [Add Crate](#add-crate)
+- [Static functions](#static-functions)
 - [Session initialization](#session-initialization)
 - [Features](#features)
     - [Get input](#get-input)
@@ -24,6 +25,12 @@ cargo add aoc_api
 ```rust
 use aoc_api::Session;
 ```
+
+<br>
+
+# Static functions
+
+All of the [blow mentioned functions](#features) are also available as **static functions**, not bound to the Session struct. These can be used for easier access (not having to initialize a Session struct) in your application. The Session struct just acts as a wrapper around the _static functions_, which **do not differ** in any way to the _Session struct functions_.
 
 <br>
 
@@ -78,12 +85,11 @@ let achieved_stars: Result<HashMap<u16, u8>, Box<dyn Error>> = client.get_all_st
 ## Submit answer
 
 ```rust
-let response: Result<Response, Box<dyn Error>> = client.submit_answer(part: u8, answer: &str).await; // Submits an answer to part 1 or 2 of the AoC puzzle. Returns a response type with a success status and a cooldown period
+let response: Result<bool, SubmitAnswerError> = client.submit_answer_explicit_error(part: u8, answer: &str).await; // Submits an answer to part 1 or 2 of the AoC puzzle. Returns a boolean whether the answer is correct
 ```
 
 <br><br>
 
-*credits to:*
-> [Max](https://github.com/Mqxx) - markdown info icons <br>
-> [Monday Morning Haskell](https://mmhaskell.com/) - documentation on how to obtaining session cookie <br>
-> [Developer.Mozilla](https://developer.mozilla.org) - documentation on how to name Regex groups
+_credits to:_
+
+> [Max](https://github.com/Mqxx) - markdown info icons <br> > [Monday Morning Haskell](https://mmhaskell.com/) - documentation on how to obtaining session cookie <br> > [Developer.Mozilla](https://developer.mozilla.org) - documentation on how to name Regex groups
