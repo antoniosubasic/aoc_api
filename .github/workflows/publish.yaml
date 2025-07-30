@@ -1,11 +1,9 @@
-name: Build 🛠️ and Publish 🚀
+name: Publish new Release 🚀
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'src/**'
+    tags:
+      - v*
 
 jobs:
   publish:
@@ -21,6 +19,16 @@ jobs:
         with:
           toolchain: stable
           override: true
+
+      - name: Match Tag with Crate Version 📦
+        run: |
+          crate_version=$(cargo pkgid | sed 's|.*#||')
+          tag_version=$(echo "${GITHUB_REF}" | sed 's|refs/tags/v||')
+
+          if [ "$crate_version" != "$tag_version" ]; then
+            echo "pushed tag version ($tag_version) does not match crate version ($crate_version)"
+            exit 1
+          fi
 
       - name: Publish crate 🚀
         run: cargo publish --token ${{ secrets.CRATES_API_TOKEN }}
