@@ -14,5 +14,5 @@ readme = "README.md"
 
 [dependencies]
 regex = "1.11.1"
-reqwest = { version = "0.12.22", features = ["json", "cookies"] }
-tokio = { version = "1.47.0", features = ["full"] }
+reqwest = { version = "0.12.23", features = ["json", "cookies"] }
+tokio = { version = "1.47.1", features = ["full"] }
