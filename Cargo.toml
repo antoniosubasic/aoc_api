@@ -11,7 +11,14 @@ license = "GPL-3.0-only"
 readme = "README.md"
 keywords = ["advent-of-code", "aoc", "api", "client"]
 categories = ["api-bindings", "web-programming::http-client"]
-exclude = [".github/", ".editorconfig", "deny.toml", "release-plz.toml"]
+exclude = [
+  ".github/",
+  ".editorconfig",
+  "AGENTS.md",
+  "CLAUDE.md",
+  "deny.toml",
+  "release-plz.toml",
+]
 
 [dependencies]
 # rustls rather than the platform TLS stack, so the crate stops dragging in
