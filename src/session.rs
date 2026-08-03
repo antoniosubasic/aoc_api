@@ -283,18 +283,21 @@ impl<T: Transport> Session<T> {
     }
 }
 
-/// Turns an unsuccessful reply into the reason it was unsuccessful.
+/// Turns a reply that is not worth reading into the reason it is not.
 ///
 /// The site distinguishes very little by status code, so the body has the last
-/// word: a refusal that mentions logging in is an expired cookie however it
-/// was dressed up.
+/// word - and it has it first, because a rejected cookie is not always a
+/// rejected request. The input endpoint refuses with a `400`, while the puzzle
+/// and events pages answer `200` with a perfectly ordinary page that happens
+/// to offer a log-in link. Both mean the same thing, and saying so beats
+/// failing later on a page that turned out to have no puzzle in it.
 fn check(response: &Response, puzzle: Option<Puzzle>) -> Result<(), Error> {
-    if response.is_success() {
-        return Ok(());
-    }
-
     if parse::is_logged_out(&response.body) {
         return Err(Error::Unauthorized);
+    }
+
+    if response.is_success() {
+        return Ok(());
     }
 
     match (response.status, puzzle) {
@@ -311,6 +314,7 @@ mod tests {
 
     const PUZZLE: &str = include_str!("../tests/fixtures/puzzle-day.html");
     const EVENTS: &str = include_str!("../tests/fixtures/events.html");
+    const EVENTS_LOGGED_OUT: &str = include_str!("../tests/fixtures/events-logged-out.html");
     const CORRECT: &str = include_str!("../tests/fixtures/submit-correct.html");
     const WRONG: &str = include_str!("../tests/fixtures/submit-wrong.html");
     const COOLDOWN: &str = include_str!("../tests/fixtures/submit-cooldown.html");
@@ -487,6 +491,18 @@ mod tests {
             .input_text(puzzle())
             .await
             .expect_err("the cookie was not accepted");
+
+        assert!(matches!(error, Error::Unauthorized), "{error}");
+    }
+
+    #[tokio::test]
+    async fn a_page_offering_a_login_is_an_expired_cookie_even_at_status_200() {
+        let session = session(FakeTransport::serving(EVENTS_LOGGED_OUT));
+
+        let error = session
+            .stars()
+            .await
+            .expect_err("the page has no stars because nobody is logged in");
 
         assert!(matches!(error, Error::Unauthorized), "{error}");
     }
