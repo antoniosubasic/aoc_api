@@ -1,0 +1,26 @@
+[workspace]
+git_tag_name = "v{{ version }}"
+git_release_enable = true
+git_release_type = "auto"
+changelog_update = true
+allow_dirty = false
+
+[changelog]
+protect_breaking_commits = true
+sort_commits = "oldest"
+
+commit_parsers = [
+  { message = "^feat", group = "added" },
+  { message = "^fix", group = "fixed" },
+  { message = "^perf", group = "performance" },
+  { message = "^refactor", group = "changed" },
+  { message = "^bump", group = "dependencies" },
+  { message = "^build\\(deps\\)", group = "dependencies" },
+  { message = "^docs", group = "documentation" },
+  { message = "^test", skip = true },
+  { message = "^style", skip = true },
+  { message = "^ci", skip = true },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore", group = "other" },
+  { message = "^release", skip = true },
+]
