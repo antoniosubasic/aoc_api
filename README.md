@@ -18,7 +18,7 @@ $ cargo add aoc_api
 ```rust
 use aoc_api::{Part, Puzzle, Session, Verdict};
 
-let session = Session::new("53616c7465645f5f...")?;
+let session = Session::new("53616c7465645f5f...", "github.com/my-username/my-repo by me@example.com")?;
 let puzzle = Puzzle::at(2024, 7)?;
 
 let input = session.input_text(puzzle).await?;
@@ -111,15 +111,12 @@ This crate follows the Advent of Code
 Two of them are settled here; two are deliberately left to you, and this
 section says which is which so you can be accurate about your own tool.
 
-- **Every request identifies the maintainer of this crate.** The `User-Agent`
-  is built by `user_agent()` in [`src/http.rs`](src/http.rs) from
-  `CARGO_PKG_REPOSITORY`, `CARGO_PKG_VERSION` and `CARGO_PKG_AUTHORS`, so it
-  reads `github.com/antoniosubasic/aoc_api v<version> by <maintainer>` and
-  cannot drift from reality. `ReqwestTransport::new` is the only place in the
-  crate an HTTP client is built, and the header is baked into that client's
-  default headers, so no call site can omit it. If your tool wants to be
-  reachable too, `ClientOptions::identified_by` appends your contact details in
-  parentheses — it never replaces this crate's.
+- **Every request identifies you.** You provide your identification when opening
+  a `Session`, which is built into the HTTP client's default headers so no
+  call site can omit it. The [automation guidelines](https://www.reddit.com/r/adventofcode/wiki/faqs/automation)
+  ask for `github.com/your-repo by you@example.com` or similar. Since this is
+  a library, the tool built upon it is the one doing the work, so it is the
+  one that must identify itself.
 - **Nothing happens that you did not ask for.** A request is made when you call
   a method and at no other time: nothing polls, retries, prefetches or runs on
   a schedule. The one call that can make two requests is `submit`, and only
@@ -170,7 +167,7 @@ Version 4 is a rewrite. Every removed item and its replacement:
 
 | 3.x | 4.x |
 | --- | --- |
-| `Session::new(cookie, year, day)` | `Session::new(&cookie)?` plus `Puzzle::at(year, day)?` |
+| `Session::new(cookie, year, day)` | `Session::new(&cookie, "identification")?` plus `Puzzle::at(year, day)?` |
 | `Session::from_pattern(cookie, input, pattern)` | recover the year and day yourself, then `Puzzle::at(year, day)?` |
 | `get_input_text(&cookie, year, day).await?` | `session.input_text(puzzle).await?` |
 | `get_input_lines(&cookie, year, day).await?` | `session.input_lines(puzzle).await?` |
@@ -198,7 +195,7 @@ match aoc_api::submit_answer_explicit_error(&cookie, 2024, 7, 1, "3749").await {
 }
 
 // 4.x
-let session = Session::new(&cookie)?;
+let session = Session::new(&cookie, "github.com/my-username/my-repo by me@example.com")?;
 let puzzle = Puzzle::at(2024, 7)?;
 
 let input = session.input_text(puzzle).await?;

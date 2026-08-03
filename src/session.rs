@@ -84,7 +84,7 @@ impl fmt::Display for Verdict {
 /// use aoc_api::{Part, Puzzle, Session};
 ///
 /// # async fn example() -> Result<(), aoc_api::Error> {
-/// let session = Session::new("53616c7465645f5f...")?;
+/// let session = Session::new("53616c7465645f5f...", "github.com/my-username/my-repo by me@example.com")?;
 /// let puzzle = Puzzle::at(2024, 7)?;
 ///
 /// let input = session.input_text(puzzle).await?;
@@ -109,8 +109,8 @@ impl Session {
     ///
     /// Returns [`Error::Transport`] if the cookie cannot be sent in a header
     /// or the HTTP client cannot be built.
-    pub fn new(cookie: &str) -> Result<Self, Error> {
-        Self::configured(&ClientOptions::new(cookie))
+    pub fn new(cookie: &str, identification: &str) -> Result<Self, Error> {
+        Self::configured(&ClientOptions::new(cookie, identification))
     }
 
     /// Opens a session with the client configured explicitly.

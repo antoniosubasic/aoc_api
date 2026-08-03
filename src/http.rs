@@ -7,7 +7,7 @@
 //! be exercised without a network or a session cookie.
 //!
 //! Because there is exactly one constructor, there is exactly one place the
-//! [`user_agent`] the Advent of Code [automation guidelines] ask for is
+//! identification the Advent of Code [automation guidelines] ask for is
 //! installed: it is baked into the client's default headers, so no request -
 //! present or future, from this crate or from anything built on it - can leave
 //! without it.
@@ -20,80 +20,10 @@ use reqwest::{
     Client,
     header::{COOKIE, HeaderMap, HeaderValue, USER_AGENT as USER_AGENT_HEADER},
 };
-use std::{error::Error, fmt, future::Future, sync::LazyLock, time::Duration};
+use std::{error::Error, fmt, future::Future, time::Duration};
 
 /// How long a request may take before it is abandoned.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
-
-/// This crate's identification, built once from the package manifest.
-static USER_AGENT: LazyLock<String> = LazyLock::new(|| {
-    let repository = or(
-        repository(env!("CARGO_PKG_REPOSITORY")),
-        env!("CARGO_PKG_NAME"),
-    );
-    let maintainer = or(maintainer(env!("CARGO_PKG_AUTHORS")), "unknown");
-
-    format!(
-        "{repository} v{} by {maintainer}",
-        env!("CARGO_PKG_VERSION")
-    )
-});
-
-/// The `User-Agent` every request from this crate carries.
-///
-/// The Advent of Code [automation guidelines] ask automated tools to say who
-/// wrote them and how to reach that person, in the shape
-/// `github.com/topaz/topazs-cool-tool by topaz@topaz.tz`. This is that, for
-/// this crate: repository, version and maintainer, all read from the package
-/// manifest at compile time so it cannot drift if the crate is renamed, moved
-/// or released.
-///
-/// It names *this crate's* maintainer rather than whoever is using it, because
-/// that is who would need to be told to stop. A tool built on this crate can
-/// add its own identification with [`ClientOptions::identified_by`], which
-/// appends to this and never replaces it.
-///
-/// ```
-/// let identification = aoc_api::user_agent();
-///
-/// assert!(identification.starts_with("github.com/"));
-/// assert!(identification.contains('@'));
-/// ```
-///
-/// [automation guidelines]: https://www.reddit.com/r/adventofcode/wiki/faqs/automation
-#[must_use]
-pub fn user_agent() -> &'static str {
-    &USER_AGENT
-}
-
-/// A repository URL without its scheme, matching the shape the guidelines ask
-/// for.
-fn repository(url: &str) -> &str {
-    url.strip_prefix("https://")
-        .or_else(|| url.strip_prefix("http://"))
-        .unwrap_or(url)
-        .trim_end_matches('/')
-        .trim_end_matches(".git")
-}
-
-/// The first author's email address, or their name if they left none.
-///
-/// `CARGO_PKG_AUTHORS` is colon separated and each entry is usually
-/// `Name <email>`. The email is what matters here, and taking it also keeps
-/// any non-ASCII in a name out of a header that cannot carry it.
-fn maintainer(authors: &str) -> &str {
-    let first = authors.split(':').next().unwrap_or(authors).trim();
-
-    match (first.find('<'), first.find('>')) {
-        (Some(open), Some(close)) if open + 1 < close => first[open + 1..close].trim(),
-        _ => first,
-    }
-}
-
-/// `text`, unless it is empty.
-fn or<'a>(text: &'a str, fallback: &'a str) -> &'a str {
-    if text.is_empty() { fallback } else { text }
-}
 
 /// Anything that stops a request from producing a reply.
 #[derive(Debug, thiserror::Error)]
@@ -235,7 +165,7 @@ pub trait Transport {
 #[derive(Clone)]
 pub struct ClientOptions {
     cookie: String,
-    identification: Option<String>,
+    identification: String,
     timeout: Duration,
 }
 
@@ -246,25 +176,12 @@ impl ClientOptions {
     /// It is a credential: it is marked sensitive so it stays out of any
     /// header dump, and it is never printed by [`Debug`].
     #[must_use]
-    pub fn new(cookie: impl Into<String>) -> Self {
+    pub fn new(cookie: impl Into<String>, identification: impl Into<String>) -> Self {
         Self {
             cookie: cookie.into(),
-            identification: None,
+            identification: identification.into(),
             timeout: DEFAULT_TIMEOUT,
         }
-    }
-
-    /// Adds the caller's own identification to this crate's.
-    ///
-    /// Pass something a person could be reached at, in the shape the Advent of
-    /// Code automation guidelines ask for - `github.com/you/your-tool by
-    /// you@example.com`. It is appended in parentheses after [`user_agent`],
-    /// never in place of it, so a request always says which crate made it as
-    /// well as which tool asked for it.
-    #[must_use]
-    pub fn identified_by(mut self, identification: impl Into<String>) -> Self {
-        self.identification = Some(identification.into());
-        self
     }
 
     /// Overrides how long a request may take, from [`DEFAULT_TIMEOUT`].
@@ -275,11 +192,8 @@ impl ClientOptions {
     }
 
     /// The `User-Agent` these options produce.
-    fn identification(&self) -> String {
-        self.identification.as_ref().map_or_else(
-            || user_agent().to_owned(),
-            |identification| format!("{} ({identification})", user_agent()),
-        )
+    fn identification(&self) -> &str {
+        &self.identification
     }
 }
 
@@ -287,7 +201,7 @@ impl fmt::Debug for ClientOptions {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ClientOptions")
             .field("cookie", &"<redacted>")
-            .field("identification", &self.identification())
+            .field("identification", &self.identification)
             .field("timeout", &self.timeout)
             .finish()
     }
@@ -373,8 +287,8 @@ fn headers(options: &ClientOptions) -> Result<HeaderMap, TransportError> {
     let identification = options.identification();
     headers.insert(
         USER_AGENT_HEADER,
-        HeaderValue::from_str(&identification)
-            .map_err(|_| TransportError::Identification { identification })?,
+        HeaderValue::from_str(identification)
+            .map_err(|_| TransportError::Identification { identification: identification.to_owned() })?,
     );
 
     let mut cookie = HeaderValue::from_str(&format!("session={}", options.cookie))
@@ -430,7 +344,7 @@ mod tests {
     async fn every_request_carries_the_session_cookie() {
         let (url, server) = serve_once();
 
-        let response = transport(&ClientOptions::new("53616c7465645f5f"))
+        let response = transport(&ClientOptions::new("53616c7465645f5f", "test-agent"))
             .execute(Request::get(url))
             .await
             .expect("the loopback server replies");
@@ -443,104 +357,10 @@ mod tests {
         assert_eq!(response.body, "hello");
     }
 
-    #[tokio::test]
-    async fn every_request_identifies_the_maintainer_of_this_crate() {
-        let (url, server) = serve_once();
-
-        transport(&ClientOptions::new("cookie"))
-            .execute(Request::get(url))
-            .await
-            .expect("the loopback server replies");
-        let sent = server.join().expect("the server thread");
-
-        assert!(
-            sent.contains(&format!("user-agent: {}\r\n", user_agent())),
-            "the identification is missing from:\n{sent}"
-        );
-        assert!(
-            sent.contains("github.com/antoniosubasic/aoc_api"),
-            "the identification does not name the repository:\n{sent}"
-        );
-    }
-
-    #[tokio::test]
-    async fn a_caller_can_only_add_to_the_maintainers_identification() {
-        let (url, server) = serve_once();
-
-        transport(
-            &ClientOptions::new("cookie").identified_by("github.com/you/tool by you@example.com"),
-        )
-        .execute(Request::get(url))
-        .await
-        .expect("the loopback server replies");
-        let sent = server.join().expect("the server thread");
-
-        assert!(
-            sent.contains(&format!(
-                "user-agent: {} (github.com/you/tool by you@example.com)\r\n",
-                user_agent()
-            )),
-            "the caller replaced rather than extended the identification:\n{sent}"
-        );
-    }
-
-    #[test]
-    fn the_identification_names_this_repository_version_and_maintainer() {
-        let identification = user_agent();
-
-        assert!(
-            identification.starts_with("github.com/antoniosubasic/aoc_api v"),
-            "{identification}"
-        );
-        assert!(
-            identification.ends_with(&format!(
-                "v{} by {}",
-                env!("CARGO_PKG_VERSION"),
-                maintainer(env!("CARGO_PKG_AUTHORS"))
-            )),
-            "{identification}"
-        );
-        assert!(
-            identification.contains('@'),
-            "there is no way to reach anyone: {identification}"
-        );
-        assert!(
-            identification
-                .bytes()
-                .all(|byte| (0x20..0x7f).contains(&byte)),
-            "a header cannot carry this: {identification}"
-        );
-    }
-
-    #[test]
-    fn the_identification_is_read_from_the_manifest_rather_than_written_out() {
-        assert_eq!(
-            repository("https://github.com/antoniosubasic/aoc_api"),
-            "github.com/antoniosubasic/aoc_api"
-        );
-        assert_eq!(repository("http://example.com/tool/"), "example.com/tool");
-        assert_eq!(
-            repository("git@example.com:tool.git"),
-            "git@example.com:tool"
-        );
-        assert_eq!(
-            maintainer("Antonio Subašić <antonio@example.com>"),
-            "antonio@example.com"
-        );
-        assert_eq!(
-            maintainer("First <first@example.com>:Second <second@example.com>"),
-            "first@example.com"
-        );
-        assert_eq!(
-            maintainer("Someone With No Address"),
-            "Someone With No Address"
-        );
-    }
-
     #[test]
     fn an_identification_that_cannot_be_sent_is_rejected_before_any_request() {
         assert!(matches!(
-            ReqwestTransport::new(&ClientOptions::new("cookie").identified_by("tool\r\nX-Evil: 1")),
+            ReqwestTransport::new(&ClientOptions::new("cookie", "tool\r\nX-Evil: 1")),
             Err(TransportError::Identification { .. })
         ));
     }
@@ -549,7 +369,7 @@ mod tests {
     async fn a_posted_answer_is_form_encoded() {
         let (url, server) = serve_once();
 
-        transport(&ClientOptions::new("cookie"))
+        transport(&ClientOptions::new("cookie", "test-agent"))
             .execute(Request::post_form(
                 url,
                 vec![
@@ -572,14 +392,14 @@ mod tests {
     #[test]
     fn a_cookie_that_cannot_be_sent_is_rejected_before_any_request() {
         assert!(matches!(
-            ReqwestTransport::new(&ClientOptions::new("bad\ncookie")),
+            ReqwestTransport::new(&ClientOptions::new("bad\ncookie", "test-agent")),
             Err(TransportError::Cookie)
         ));
     }
 
     #[test]
     fn the_cookie_never_appears_in_debug_output() {
-        let options = ClientOptions::new("53616c7465645f5f");
+        let options = ClientOptions::new("53616c7465645f5f", "test-agent");
         let transport = ReqwestTransport::new(&options).expect("valid options");
 
         assert!(!format!("{options:?}").contains("53616c7465645f5f"));

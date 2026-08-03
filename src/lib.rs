@@ -8,7 +8,7 @@
 //! use aoc_api::{Part, Puzzle, Session, Verdict};
 //!
 //! # async fn example() -> Result<(), aoc_api::Error> {
-//! let session = Session::new("53616c7465645f5f...")?;
+//! let session = Session::new("53616c7465645f5f...", "github.com/my-username/my-repo by me@example.com")?;
 //! let puzzle = Puzzle::at(2024, 7)?;
 //!
 //! let input = session.input_text(puzzle).await?;
@@ -46,11 +46,9 @@
 //! This crate follows the Advent of Code [automation guidelines]. Two of them
 //! are settled here, and two are deliberately left to you:
 //!
-//! * **Identification.** Every request carries a `User-Agent` naming this
-//!   crate's repository, version and maintainer - not you, the caller. There
-//!   is one place a client is built, [`http::ReqwestTransport::new`], and the
-//!   header is baked into its default headers, so no request can go out
-//!   without it.
+//! * **Identification.** Every request carries a `User-Agent` with the
+//!   identification you provide when creating a [`Session`]. It is baked into
+//!   the HTTP client's default headers, so no request can go out without it.
 //! * **No hidden traffic.** A request happens when you call a method, and
 //!   never otherwise. Nothing polls, retries or prefetches.
 //! * **Throttling is yours.** This crate does not sleep between requests,
@@ -71,7 +69,6 @@ pub mod puzzle;
 pub mod session;
 
 pub use error::Error;
-pub use http::user_agent;
 pub use parse::Hint;
 pub use puzzle::{Day, Part, Puzzle, PuzzleError, Year};
 pub use session::{Session, Verdict};
