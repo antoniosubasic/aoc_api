@@ -1,18 +1,43 @@
 [package]
 name = "aoc_api"
 version = "3.0.4"
-edition = "2021"
+edition = "2024"
+rust-version = "1.88"
 authors = ["Antonio Subašić <antonio.subasic.public@gmail.com>"]
-description = "a simple Advent of Code API"
+description = "a typed, testable Advent of Code client that identifies itself as the automation guidelines ask"
 repository = "https://github.com/antoniosubasic/aoc_api"
-license = "GPL-3.0"
-keywords = ["AoC", "Advent-of-Code", "API"]
+homepage = "https://github.com/antoniosubasic/aoc_api"
+license = "GPL-3.0-only"
 readme = "README.md"
-
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+keywords = ["advent-of-code", "aoc", "api", "client"]
+categories = ["api-bindings", "web-programming::http-client"]
+exclude = [".github/", ".editorconfig", "deny.toml", "release-plz.toml"]
 
 [dependencies]
-regex = "1.13.1"
-reqwest = { version = "0.13.4", features = ["json", "cookies"] }
-tokio = { version = "1.53.1", features = ["full"] }
+# rustls rather than the platform TLS stack, so the crate stops dragging in
+# openssl and the advisories that follow it
+reqwest = { version = "0.13.4", default-features = false, features = [
+  "charset",
+  "form",
+  "http2",
+  "rustls",
+  "system-proxy",
+] }
+thiserror = "2.0.19"
+
+[dev-dependencies]
+# only to drive the async API in tests; the library itself needs no runtime of
+# its own and runs on whichever one the caller already has
+tokio = { version = "1.48.0", features = ["macros", "rt"] }
+
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+unreachable_pub = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+expect_used = "deny"
+panic = "deny"
+unwrap_used = "deny"
