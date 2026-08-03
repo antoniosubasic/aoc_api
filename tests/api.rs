@@ -4,6 +4,8 @@
 //! `adventofcode.com` - which is also the point: a tool built on this crate
 //! can test itself the same way.
 
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
+
 use aoc_api::{
     Error, Part, Puzzle, Session, Verdict,
     http::{Response, fake::FakeTransport},
@@ -69,8 +71,8 @@ fn a_whole_day_can_be_solved_without_touching_the_network() {
 fn a_cooldown_is_an_error_a_caller_can_branch_on() {
     let session = Session::with_transport(FakeTransport::serving(COOLDOWN));
 
-    let error = block_on(session.submit(puzzle(), Part::Two, "241861950"))
-        .expect_err("nothing was judged");
+    let error =
+        block_on(session.submit(puzzle(), Part::Two, "241861950")).expect_err("nothing was judged");
 
     match error {
         Error::Cooldown { wait } => assert_eq!(wait, Duration::from_secs(270)),

@@ -71,6 +71,7 @@ pub mod puzzle;
 pub mod session;
 
 pub use error::Error;
+pub use http::user_agent;
 pub use parse::Hint;
 pub use puzzle::{Day, Part, Puzzle, PuzzleError, Year};
 pub use session::{Session, Verdict};
