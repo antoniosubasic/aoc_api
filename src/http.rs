@@ -287,8 +287,9 @@ fn headers(options: &ClientOptions) -> Result<HeaderMap, TransportError> {
     let identification = options.identification();
     headers.insert(
         USER_AGENT_HEADER,
-        HeaderValue::from_str(identification)
-            .map_err(|_| TransportError::Identification { identification: identification.to_owned() })?,
+        HeaderValue::from_str(identification).map_err(|_| TransportError::Identification {
+            identification: identification.to_owned(),
+        })?,
     );
 
     let mut cookie = HeaderValue::from_str(&format!("session={}", options.cookie))
