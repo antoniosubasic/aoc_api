@@ -26,6 +26,11 @@
 //! * [`Session`] holds the cookie and the one HTTP client built from it.
 //!   Which puzzle a call is about is an argument, so one session serves a
 //!   whole event.
+//! * Every endpoint is also a free function over a [`http::Transport`] -
+//!   [`session::input_text`], [`session::submit`] and the rest - for a caller
+//!   that already keeps a transport in a type of its own and does not want a
+//!   second wrapper around it. [`Session`]'s methods are those functions with
+//!   the transport filled in.
 //! * [`Puzzle`], [`Year`], [`Day`] and [`Part`] are validated newtypes, so an
 //!   out-of-range coordinate cannot become a request.
 //! * [`http::Transport`] is the seam everything external sits behind.
@@ -47,9 +52,10 @@
 //! are settled here, and two are deliberately left to you:
 //!
 //! * **Identification.** Every request carries a `User-Agent` with the
-//!   identification you provide when creating a [`Session`]. It is baked into
-//!   the HTTP client's default headers, so no request can go out without it.
-//! * **No hidden traffic.** A request happens when you call a method, and
+//!   identification you provide when the HTTP client is built, whether that is
+//!   [`Session::new`] or [`http::ReqwestTransport::new`]. It is baked into the
+//!   client's default headers, so no request can go out without it.
+//! * **No hidden traffic.** A request happens when you call an endpoint, and
 //!   never otherwise. Nothing polls, retries or prefetches.
 //! * **Throttling is yours.** This crate does not sleep between requests,
 //!   because a library cannot know how a program is being driven and a hidden

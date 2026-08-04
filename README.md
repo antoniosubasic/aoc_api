@@ -50,6 +50,39 @@ it stays out of header dumps, and never prints it in `Debug` output.
 One session serves a whole event: it holds the cookie and the single HTTP
 client built from it, and which puzzle a call is about is an argument.
 
+### Without a session
+
+Every row in that table is also a free function in `aoc_api::session`, taking
+the transport the request goes out through instead of being a method on the
+thing that holds it:
+
+```rust
+use aoc_api::{
+    Part, Puzzle, session,
+    http::{ClientOptions, ReqwestTransport},
+};
+
+let transport = ReqwestTransport::new(&ClientOptions::new(
+    "53616c7465645f5f...",
+    "github.com/my-username/my-repo by me@example.com",
+))?;
+let puzzle = Puzzle::at(2024, 7)?;
+
+let input = session::input_text(&transport, puzzle).await?;
+let verdict = session::submit(&transport, puzzle, Part::One, "3749").await?;
+```
+
+`Session`'s methods *are* those functions with the transport filled in — they
+delegate, so the two surfaces are one implementation and cannot drift apart.
+Use whichever fits: the functions if your own type already holds a transport
+and a second wrapper around it would only be in the way, `Session` if nothing
+else does. Either way the client is built once and reused; it is what carries
+your identification, so build it outside the loop rather than per call.
+
+A transport is anything implementing `http::Transport`, so the same call sites
+run against `FakeTransport` in a test — see [Testing without a
+network](#testing-without-a-network).
+
 ### Validated coordinates
 
 `Puzzle`, `Year`, `Day` and `Part` are newtypes with private fields and
@@ -112,15 +145,17 @@ This crate follows the Advent of Code
 Two of them are settled here; two are deliberately left to you, and this
 section says which is which so you can be accurate about your own tool.
 
-- **Every request identifies you.** You provide your identification when opening
-  a `Session`, which is built into the HTTP client's default headers so no
-  call site can omit it. The [automation guidelines](https://www.reddit.com/r/adventofcode/wiki/faqs/automation)
+- **Every request identifies you.** You provide your identification when the
+  HTTP client is built — opening a `Session`, or building the
+  `ReqwestTransport` yourself — and it becomes one of that client's default
+  headers, so no call site can omit it and no endpoint can add one of its own.
+  The [automation guidelines](https://www.reddit.com/r/adventofcode/wiki/faqs/automation)
   ask for `github.com/your-repo by you@example.com` or similar. Since this is
   a library, the tool built upon it is the one doing the work, so it is the
   one that must identify itself.
 - **Nothing happens that you did not ask for.** A request is made when you call
-  a method and at no other time: nothing polls, retries, prefetches or runs on
-  a schedule. The one call that can make two requests is `submit`, and only
+  an endpoint and at no other time: nothing polls, retries, prefetches or runs
+  on a schedule. The one call that can make two requests is `submit`, and only
   when the site says the part is already solved, in which case it reads the
   puzzle page to compare your answer against the accepted one.
 - **Throttling is yours.** This crate does not sleep between requests. A
@@ -147,9 +182,12 @@ Decisions made during the rewrite, and why:
   and needs no runtime features, so it runs on whichever executor you already
   have — including a current-thread runtime driven to completion, which is how
   a synchronous program should use it.
-- **One session, no free functions.** The free functions rebuilt a client per
-  call and duplicated `Session` exactly. `Session` is now the only API: it is
-  where the cookie and the identified client live, and where they are reused.
+- **Two surfaces, one implementation.** The 3.x free functions took a cookie,
+  so each one rebuilt a client per call and duplicated `Session` exactly. The
+  endpoints are free functions again, but over a `Transport`: the client is
+  still built once and reused, and `Session` is those same functions with it
+  filled in. Nobody has to hold a `Session` to reach an endpoint, and there is
+  no second copy of the logic that could disagree with the first.
 - **A cooldown is a `Duration`.** The remaining wait used to be handed back as
   the site's own prose. It is now parsed into a `Duration`, in both shapes the
   site uses (`4m 30s` and `one minute`), so a caller can actually wait for it.
@@ -182,6 +220,11 @@ Version 4 is a rewrite. Every removed item and its replacement:
 | `SubmitAnswerError::Unknown(String)` | `Error::Parse(ParseError::Submission { snippet })` |
 | `SubmitAnswerError::Other(String)` | `Error::Transport(_)`, `Error::Unauthorized`, `Error::Locked { .. }` or `Error::Status { .. }`, depending on what actually went wrong |
 | `Box<dyn Error>` | `aoc_api::Error` |
+
+If it was the free functions you liked, they exist again as
+`aoc_api::session::input_text(&transport, puzzle)` and friends — over a
+transport you build once rather than a cookie you hand over per call. See
+[Without a session](#without-a-session).
 
 A whole call site, before and after:
 

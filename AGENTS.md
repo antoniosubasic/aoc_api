@@ -52,12 +52,16 @@ parsing:
   `strip_tags`/`decode_entities`), **no `regex`**. `Submission` is what the
   reply literally said; turning it into a `Verdict` is `session`'s job because
   two cases need a second request.
-- **`session`** — the endpoints. `Session<T = ReqwestTransport>` holds the
-  cookie and the one client built from it; which puzzle a call is about is an
-  argument, so a session serves a whole event. `fn check` decides what a reply
-  means: it asks `parse::is_logged_out` **before** looking at the status,
-  because a rejected cookie arrives as a `400` from the input endpoint but as
-  an ordinary `200` page with a log-in link from the puzzle and events pages.
+- **`session`** — the endpoints. Each one is a free function over a
+  `&impl Transport` (`input_text`, `samples`, `stars`, `submit`, …), and
+  `Session<T = ReqwestTransport>` is a holder for the transport whose methods
+  delegate to them one line at a time. Both surfaces are public and neither
+  may grow behaviour the other lacks — put logic in the function, never in the
+  method. Which puzzle a call is about is an argument, so a session serves a
+  whole event. `fn check` decides what a reply means: it asks
+  `parse::is_logged_out` **before** looking at the status, because a rejected
+  cookie arrives as a `400` from the input endpoint but as an ordinary `200`
+  page with a log-in link from the puzzle and events pages.
 - **`error`** — `Error` is the union of the per-module typed errors
   (`TransportError`, `ParseError`, `PuzzleError`) plus the cases that only
   exist once a reply is read in context (`Unauthorized`, `Locked`, `Cooldown`,

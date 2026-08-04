@@ -1,9 +1,16 @@
 //! The endpoints.
 //!
-//! A [`Session`] holds the session cookie and the one HTTP client built from
-//! it, and every request the crate makes goes out through it. Which puzzle a
-//! call is about is an argument rather than part of the session, so one
-//! session serves a whole event without rebuilding a client per call.
+//! Each one is a free function over the [`Transport`] the request goes out
+//! through - [`input_text`], [`samples`], [`stars`], [`submit`] and the rest.
+//! [`Session`] is the same set of calls with the transport already in hand: it
+//! holds the session cookie and the one HTTP client built from it, so a
+//! program that has a session does not pass a transport around. The methods
+//! delegate to the functions, so the two are the same code and neither can
+//! drift from the other.
+//!
+//! Which puzzle a call is about is an argument either way, so one session
+//! serves a whole event without rebuilding a client per call - and so a caller
+//! keeping the transport in a type of its own pays that cost once too.
 //!
 //! Nothing here is throttled or cached; see the crate documentation for why
 //! that is the caller's decision.
@@ -104,6 +111,10 @@ impl fmt::Display for Verdict {
 /// # Ok(())
 /// # }
 /// ```
+///
+/// Every method here is the free function of the same name with the transport
+/// filled in, so a caller that already holds a [`Transport`] can skip this
+/// type entirely and call [`input_text`], [`submit`] and the rest directly.
 #[derive(Debug, Clone)]
 pub struct Session<T = ReqwestTransport> {
     transport: T,
@@ -154,146 +165,256 @@ impl<T: Transport> Session<T> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Unauthorized`] if the cookie was not accepted,
-    /// [`Error::Locked`] if the puzzle has not unlocked yet, or
-    /// [`Error::Transport`] if the request failed.
+    /// As [`input_text`].
     pub async fn input_text(&self, puzzle: Puzzle) -> Result<String, Error> {
-        let body = self.get(puzzle.input_url(), Some(puzzle)).await?;
-
-        Ok(body.trim_end_matches('\n').to_owned())
+        input_text(&self.transport, puzzle).await
     }
 
     /// Downloads a puzzle's personal input as lines.
     ///
     /// # Errors
     ///
-    /// As [`Session::input_text`].
+    /// As [`input_lines`].
     pub async fn input_lines(&self, puzzle: Puzzle) -> Result<Vec<String>, Error> {
-        Ok(self
-            .input_text(puzzle)
-            .await?
-            .lines()
-            .map(ToOwned::to_owned)
-            .collect())
+        input_lines(&self.transport, puzzle).await
     }
 
     /// Every sample block on a puzzle's page, in the order they appear.
     ///
     /// # Errors
     ///
-    /// As [`Session::input_text`]. An unsolved puzzle still has samples, but a
-    /// locked one has no page at all.
+    /// As [`samples`].
     pub async fn samples(&self, puzzle: Puzzle) -> Result<Vec<String>, Error> {
-        Ok(parse::samples(&self.page(puzzle).await?))
+        samples(&self.transport, puzzle).await
     }
 
     /// The `nth` sample block on a puzzle's page, counting from one.
     ///
     /// # Errors
     ///
-    /// As [`Session::samples`], plus [`Error::Parse`] if the page has fewer
-    /// sample blocks than that.
+    /// As [`sample_text`].
     pub async fn sample_text(&self, puzzle: Puzzle, nth: u8) -> Result<String, Error> {
-        Ok(parse::sample(&self.page(puzzle).await?, nth)?)
+        sample_text(&self.transport, puzzle, nth).await
     }
 
     /// The `nth` sample block on a puzzle's page, as lines.
     ///
     /// # Errors
     ///
-    /// As [`Session::sample_text`].
+    /// As [`sample_lines`].
     pub async fn sample_lines(&self, puzzle: Puzzle, nth: u8) -> Result<Vec<String>, Error> {
-        Ok(self
-            .sample_text(puzzle, nth)
-            .await?
-            .lines()
-            .map(ToOwned::to_owned)
-            .collect())
+        sample_lines(&self.transport, puzzle, nth).await
     }
 
     /// How many stars this account has earned in each event.
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Unauthorized`] if the cookie was not accepted,
-    /// [`Error::Parse`] if the page listed no events, or [`Error::Transport`]
-    /// if the request failed.
+    /// As [`stars`].
     pub async fn stars(&self) -> Result<BTreeMap<Year, u8>, Error> {
-        let body = self.get(format!("{BASE_URL}/events"), None).await?;
-
-        Ok(parse::stars(&body)?)
+        stars(&self.transport).await
     }
 
     /// The answer a puzzle's page shows as accepted for `part`.
     ///
     /// # Errors
     ///
-    /// As [`Session::samples`], plus [`Error::Parse`] if that part is not
-    /// solved yet.
+    /// As [`accepted_answer`].
     pub async fn accepted_answer(&self, puzzle: Puzzle, part: Part) -> Result<String, Error> {
-        Ok(parse::accepted_answer(&self.page(puzzle).await?, part)?)
+        accepted_answer(&self.transport, puzzle, part).await
     }
 
     /// Submits an answer and reports how the site judged it.
     ///
-    /// A rejected answer is a [`Verdict`], not an error. If the part turns out
-    /// to be solved already the site refuses to judge anything, so the answer
-    /// is compared against the accepted one on the puzzle page, which costs a
-    /// second request. If that page shows no accepted answer for the part, the
-    /// site was never asking for one: that is [`Verdict::WrongLevel`], not a
-    /// failure to read the page.
+    /// A rejected answer is a [`Verdict`], not an error; see [`submit`] for
+    /// what the site's replies mean and when one call makes two requests.
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Cooldown`] if an answer was submitted too recently for
-    /// this one to be judged, [`Error::Unauthorized`] if the cookie was not
-    /// accepted, [`Error::Locked`] if the puzzle has not unlocked yet,
-    /// [`Error::Parse`] if the reply was not one this crate knows, or
-    /// [`Error::Transport`] if the request failed.
+    /// As [`submit`].
     pub async fn submit(&self, puzzle: Puzzle, part: Part, answer: &str) -> Result<Verdict, Error> {
-        let request = Request::post_form(
-            puzzle.answer_url(),
-            vec![
-                ("level".to_owned(), part.number().to_string()),
-                ("answer".to_owned(), answer.to_owned()),
-            ],
-        );
-
-        let body = self.send(request, Some(puzzle)).await?;
-
-        match parse::submission(&body)? {
-            Submission::Correct => Ok(Verdict::Correct),
-            Submission::Incorrect { hint, wait } => Ok(Verdict::Incorrect { hint, wait }),
-            Submission::TooRecent { wait } => Err(Error::Cooldown { wait }),
-            Submission::LoggedOut => Err(Error::Unauthorized),
-            Submission::AlreadyComplete => match self.accepted_answer(puzzle, part).await {
-                Ok(accepted) => Ok(Verdict::AlreadyComplete {
-                    correct: accepted.trim() == answer.trim(),
-                }),
-                Err(Error::Parse(ParseError::AcceptedAnswer { .. })) => Ok(Verdict::WrongLevel),
-                Err(error) => Err(error),
-            },
-        }
+        submit(&self.transport, puzzle, part, answer).await
     }
+}
 
-    /// A puzzle's page.
-    async fn page(&self, puzzle: Puzzle) -> Result<String, Error> {
-        self.get(puzzle.url(), Some(puzzle)).await
+/// Downloads a puzzle's personal input, without its trailing newline.
+///
+/// ```
+/// use aoc_api::{Puzzle, http::fake::FakeTransport, session};
+///
+/// let transport = FakeTransport::serving("1721\n979\n366\n");
+/// let puzzle = Puzzle::at(2020, 1)?;
+///
+/// let runtime = tokio::runtime::Builder::new_current_thread().build()?;
+/// let input = runtime.block_on(session::input_text(&transport, puzzle))?;
+///
+/// assert_eq!(input, "1721\n979\n366");
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+///
+/// # Errors
+///
+/// Returns [`Error::Unauthorized`] if the cookie was not accepted,
+/// [`Error::Locked`] if the puzzle has not unlocked yet, or
+/// [`Error::Transport`] if the request failed.
+pub async fn input_text(transport: &impl Transport, puzzle: Puzzle) -> Result<String, Error> {
+    let body = get(transport, puzzle.input_url(), Some(puzzle)).await?;
+
+    Ok(body.trim_end_matches('\n').to_owned())
+}
+
+/// Downloads a puzzle's personal input as lines.
+///
+/// # Errors
+///
+/// As [`input_text`].
+pub async fn input_lines(transport: &impl Transport, puzzle: Puzzle) -> Result<Vec<String>, Error> {
+    Ok(lines(&input_text(transport, puzzle).await?))
+}
+
+/// Every sample block on a puzzle's page, in the order they appear.
+///
+/// # Errors
+///
+/// As [`input_text`]. An unsolved puzzle still has samples, but a locked one
+/// has no page at all.
+pub async fn samples(transport: &impl Transport, puzzle: Puzzle) -> Result<Vec<String>, Error> {
+    Ok(parse::samples(&page(transport, puzzle).await?))
+}
+
+/// The `nth` sample block on a puzzle's page, counting from one.
+///
+/// # Errors
+///
+/// As [`samples`], plus [`Error::Parse`] if the page has fewer sample blocks
+/// than that.
+pub async fn sample_text(
+    transport: &impl Transport,
+    puzzle: Puzzle,
+    nth: u8,
+) -> Result<String, Error> {
+    Ok(parse::sample(&page(transport, puzzle).await?, nth)?)
+}
+
+/// The `nth` sample block on a puzzle's page, as lines.
+///
+/// # Errors
+///
+/// As [`sample_text`].
+pub async fn sample_lines(
+    transport: &impl Transport,
+    puzzle: Puzzle,
+    nth: u8,
+) -> Result<Vec<String>, Error> {
+    Ok(lines(&sample_text(transport, puzzle, nth).await?))
+}
+
+/// How many stars the account behind `transport` has earned in each event.
+///
+/// # Errors
+///
+/// Returns [`Error::Unauthorized`] if the cookie was not accepted,
+/// [`Error::Parse`] if the page listed no events, or [`Error::Transport`] if
+/// the request failed.
+pub async fn stars(transport: &impl Transport) -> Result<BTreeMap<Year, u8>, Error> {
+    let body = get(transport, format!("{BASE_URL}/events"), None).await?;
+
+    Ok(parse::stars(&body)?)
+}
+
+/// The answer a puzzle's page shows as accepted for `part`.
+///
+/// # Errors
+///
+/// As [`samples`], plus [`Error::Parse`] if that part is not solved yet.
+pub async fn accepted_answer(
+    transport: &impl Transport,
+    puzzle: Puzzle,
+    part: Part,
+) -> Result<String, Error> {
+    Ok(parse::accepted_answer(
+        &page(transport, puzzle).await?,
+        part,
+    )?)
+}
+
+/// Submits an answer and reports how the site judged it.
+///
+/// A rejected answer is a [`Verdict`], not an error. If the part turns out to
+/// be solved already the site refuses to judge anything, so the answer is
+/// compared against the accepted one on the puzzle page, which costs a second
+/// request. If that page shows no accepted answer for the part, the site was
+/// never asking for one: that is [`Verdict::WrongLevel`], not a failure to
+/// read the page.
+///
+/// # Errors
+///
+/// Returns [`Error::Cooldown`] if an answer was submitted too recently for
+/// this one to be judged, [`Error::Unauthorized`] if the cookie was not
+/// accepted, [`Error::Locked`] if the puzzle has not unlocked yet,
+/// [`Error::Parse`] if the reply was not one this crate knows, or
+/// [`Error::Transport`] if the request failed.
+pub async fn submit(
+    transport: &impl Transport,
+    puzzle: Puzzle,
+    part: Part,
+    answer: &str,
+) -> Result<Verdict, Error> {
+    let request = Request::post_form(
+        puzzle.answer_url(),
+        vec![
+            ("level".to_owned(), part.number().to_string()),
+            ("answer".to_owned(), answer.to_owned()),
+        ],
+    );
+
+    let body = send(transport, request, Some(puzzle)).await?;
+
+    match parse::submission(&body)? {
+        Submission::Correct => Ok(Verdict::Correct),
+        Submission::Incorrect { hint, wait } => Ok(Verdict::Incorrect { hint, wait }),
+        Submission::TooRecent { wait } => Err(Error::Cooldown { wait }),
+        Submission::LoggedOut => Err(Error::Unauthorized),
+        Submission::AlreadyComplete => match accepted_answer(transport, puzzle, part).await {
+            Ok(accepted) => Ok(Verdict::AlreadyComplete {
+                correct: accepted.trim() == answer.trim(),
+            }),
+            Err(Error::Parse(ParseError::AcceptedAnswer { .. })) => Ok(Verdict::WrongLevel),
+            Err(error) => Err(error),
+        },
     }
+}
 
-    /// Reads a URL.
-    async fn get(&self, url: String, puzzle: Option<Puzzle>) -> Result<String, Error> {
-        self.send(Request::get(url), puzzle).await
-    }
+/// A puzzle's page.
+async fn page(transport: &impl Transport, puzzle: Puzzle) -> Result<String, Error> {
+    get(transport, puzzle.url(), Some(puzzle)).await
+}
 
-    /// Sends a request and returns the body, once the reply is known to be one
-    /// worth reading.
-    async fn send(&self, request: Request, puzzle: Option<Puzzle>) -> Result<String, Error> {
-        let response = self.transport.execute(request).await?;
-        check(&response, puzzle)?;
+/// Reads a URL.
+async fn get(
+    transport: &impl Transport,
+    url: String,
+    puzzle: Option<Puzzle>,
+) -> Result<String, Error> {
+    send(transport, Request::get(url), puzzle).await
+}
 
-        Ok(response.body)
-    }
+/// Sends a request and returns the body, once the reply is known to be one
+/// worth reading.
+async fn send(
+    transport: &impl Transport,
+    request: Request,
+    puzzle: Option<Puzzle>,
+) -> Result<String, Error> {
+    let response = transport.execute(request).await?;
+    check(&response, puzzle)?;
+
+    Ok(response.body)
+}
+
+/// The owned lines of a body, which is what the `_lines` calls hand back.
+fn lines(body: &str) -> Vec<String> {
+    body.lines().map(ToOwned::to_owned).collect()
 }
 
 /// Turns a reply that is not worth reading into the reason it is not.

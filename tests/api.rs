@@ -9,6 +9,7 @@
 use aoc_api::{
     Error, Part, Puzzle, Session, Verdict,
     http::{Response, fake::FakeTransport},
+    session,
 };
 use std::time::Duration;
 
@@ -65,6 +66,65 @@ fn a_whole_day_can_be_solved_without_touching_the_network() {
             "https://adventofcode.com/2020/day/1/answer",
         ]
     );
+}
+
+/// The same day again, without a `Session` anywhere: a tool that already keeps
+/// a transport of its own calls the endpoints directly.
+#[test]
+fn a_whole_day_can_be_solved_without_a_session_too() {
+    let transport = FakeTransport::new();
+    transport
+        .push_body("1721\n979\n366\n299\n675\n1456\n")
+        .push_body(PUZZLE_PAGE)
+        .push_body(CORRECT);
+
+    block_on(async {
+        let input = session::input_lines(&transport, puzzle())
+            .await
+            .expect("the input");
+        assert_eq!(input.len(), 6);
+
+        let sample = session::sample_lines(&transport, puzzle(), 1)
+            .await
+            .expect("the first sample");
+        assert_eq!(sample[0], "1721");
+
+        let verdict = session::submit(&transport, puzzle(), Part::One, "514579")
+            .await
+            .expect("a judged answer");
+        assert_eq!(verdict, Verdict::Correct);
+    });
+
+    assert_eq!(
+        transport.requested_urls(),
+        [
+            "https://adventofcode.com/2020/day/1/input",
+            "https://adventofcode.com/2020/day/1",
+            "https://adventofcode.com/2020/day/1/answer",
+        ]
+    );
+}
+
+/// The two surfaces are one implementation, so neither can grow a behaviour
+/// the other lacks - not a different URL, not a different error.
+#[test]
+fn a_method_and_its_free_function_make_the_same_request() {
+    let through_session = {
+        let session = Session::with_transport(FakeTransport::serving(PUZZLE_PAGE));
+        let answer = block_on(session.accepted_answer(puzzle(), Part::Two)).expect("an answer");
+
+        (answer, session.transport().requests())
+    };
+
+    let directly = {
+        let transport = FakeTransport::serving(PUZZLE_PAGE);
+        let answer =
+            block_on(session::accepted_answer(&transport, puzzle(), Part::Two)).expect("an answer");
+
+        (answer, transport.requests())
+    };
+
+    assert_eq!(through_session, directly);
 }
 
 #[test]
