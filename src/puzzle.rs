@@ -13,6 +13,7 @@ pub const BASE_URL: &str = "https://adventofcode.com";
 
 /// A coordinate that does not name a puzzle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum PuzzleError {
     /// The year is before the first event.
     #[error("advent of code started in {first}, so there is no {year} event", first = Year::FIRST)]

@@ -46,6 +46,7 @@ pub enum ParseError {
 
 /// Which way a rejected answer was wrong, when the site says.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Hint {
     /// The answer is larger than the right one.
     TooHigh,

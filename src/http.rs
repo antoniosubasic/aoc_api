@@ -61,6 +61,7 @@ pub enum TransportError {
 
 /// The HTTP method of a [`Request`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Method {
     /// Reads a page.
     Get,
