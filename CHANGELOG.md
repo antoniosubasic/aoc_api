@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.0](https://github.com/antoniosubasic/aoc_api/compare/v4.0.0...v4.1.0) - 2026-08-04
+
+### Added
+
+- surface the endpoints as free functions
+
 ## [4.0.0](https://github.com/antoniosubasic/aoc_api/compare/v3.0.4...v4.0.0) - 2026-08-04
 
 ### Added
