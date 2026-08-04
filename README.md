@@ -73,6 +73,7 @@ outcome:
 | `Correct` | accepted |
 | `Incorrect { hint, wait }` | rejected; `hint` is `TooHigh`/`TooLow` when the site says so, `wait` is how long it asks you to wait |
 | `AlreadyComplete { correct }` | the part was already solved, so the site refused to judge; the answer was compared against the accepted one on the puzzle page instead |
+| `WrongLevel` | the site was not asking for an answer to that part — either part one is still unsolved, or the part was never a question, which is day 25's second star |
 
 `verdict.is_correct()` collapses that to a `bool` when that is all you need.
 

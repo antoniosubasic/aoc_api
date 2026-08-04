@@ -11,7 +11,7 @@
 use crate::{
     error::Error,
     http::{ClientOptions, Request, ReqwestTransport, Response, Transport},
-    parse::{self, Hint, Submission},
+    parse::{self, Hint, ParseError, Submission},
     puzzle::{BASE_URL, Part, Puzzle, Year},
 };
 use std::{collections::BTreeMap, fmt, time::Duration};
@@ -41,6 +41,15 @@ pub enum Verdict {
         /// Whether the submitted answer is the accepted one.
         correct: bool,
     },
+
+    /// The site was not asking for an answer to that part at all.
+    ///
+    /// It says the same thing in two situations and distinguishes neither:
+    /// the part is not open yet, because part one is still unsolved; or the
+    /// part was never a question, which is day 25's second star - that day has
+    /// one puzzle, and its second star is awarded for holding the other
+    /// forty-nine. Either way nothing was judged and nothing was wrong.
+    WrongLevel,
 }
 
 impl Verdict {
@@ -74,6 +83,7 @@ impl fmt::Display for Verdict {
             Self::AlreadyComplete { correct: false } => {
                 f.write_str("already solved, with a different answer")
             }
+            Self::WrongLevel => f.write_str("there is nothing to answer for this part"),
         }
     }
 }
@@ -228,7 +238,9 @@ impl<T: Transport> Session<T> {
     /// A rejected answer is a [`Verdict`], not an error. If the part turns out
     /// to be solved already the site refuses to judge anything, so the answer
     /// is compared against the accepted one on the puzzle page, which costs a
-    /// second request.
+    /// second request. If that page shows no accepted answer for the part, the
+    /// site was never asking for one: that is [`Verdict::WrongLevel`], not a
+    /// failure to read the page.
     ///
     /// # Errors
     ///
@@ -253,13 +265,13 @@ impl<T: Transport> Session<T> {
             Submission::Incorrect { hint, wait } => Ok(Verdict::Incorrect { hint, wait }),
             Submission::TooRecent { wait } => Err(Error::Cooldown { wait }),
             Submission::LoggedOut => Err(Error::Unauthorized),
-            Submission::AlreadyComplete => {
-                let accepted = self.accepted_answer(puzzle, part).await?;
-
-                Ok(Verdict::AlreadyComplete {
+            Submission::AlreadyComplete => match self.accepted_answer(puzzle, part).await {
+                Ok(accepted) => Ok(Verdict::AlreadyComplete {
                     correct: accepted.trim() == answer.trim(),
-                })
-            }
+                }),
+                Err(Error::Parse(ParseError::AcceptedAnswer { .. })) => Ok(Verdict::WrongLevel),
+                Err(error) => Err(error),
+            },
         }
     }
 
@@ -482,6 +494,34 @@ mod tests {
         assert!(!verdict.is_correct());
     }
 
+    // Day 25 asks one question and gives its second star away, and part two of
+    // any day refuses answers while part one is open. The site says "you don't
+    // seem to be solving the right level" to both, and its page has no
+    // accepted answer to compare against either way - which is a verdict about
+    // the question, not a failure to read the reply.
+    #[tokio::test]
+    async fn an_answer_the_site_never_asked_for_is_a_verdict_rather_than_a_parse_error() {
+        let pages = [
+            // Day 25: part one answered, no second question.
+            "<p>Your puzzle answer was <code>514579</code>.</p>",
+            // Part two, with part one still unsolved.
+            "<p>To begin, please identify yourself.</p>",
+        ];
+
+        for page in pages {
+            let transport = FakeTransport::new();
+            transport.push_body(COMPLETED).push_body(page);
+
+            let verdict = session(transport)
+                .submit(puzzle(), Part::Two, "241861950")
+                .await
+                .expect("the reply was understood");
+
+            assert_eq!(verdict, Verdict::WrongLevel);
+            assert!(!verdict.is_correct());
+        }
+    }
+
     #[tokio::test]
     async fn a_reply_asking_for_a_login_is_an_expired_cookie_whatever_its_status() {
         let transport = FakeTransport::new();
@@ -578,6 +618,10 @@ mod tests {
         assert_eq!(
             Verdict::AlreadyComplete { correct: true }.to_string(),
             "already solved, with this answer"
+        );
+        assert_eq!(
+            Verdict::WrongLevel.to_string(),
+            "there is nothing to answer for this part"
         );
     }
 }
