@@ -113,7 +113,8 @@ impl Session {
     /// Opens a session authenticated with the given session cookie.
     ///
     /// The cookie is the value of the `session` cookie on `adventofcode.com`
-    /// while logged in. It is a credential: treat it like a password.
+    /// while logged in, with or without a leading `session=`. It is a
+    /// credential: treat it like a password.
     ///
     /// # Errors
     ///

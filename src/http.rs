@@ -25,6 +25,9 @@ use std::{error::Error, fmt, future::Future, time::Duration};
 /// How long a request may take before it is abandoned.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// What the session credential is sent under.
+const COOKIE_PREFIX: &str = "session=";
+
 /// Anything that stops a request from producing a reply.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -174,12 +177,21 @@ impl ClientOptions {
     /// Options authenticating with the given session cookie.
     ///
     /// The cookie is the value of the `session` cookie on `adventofcode.com`.
+    /// A leading `session=` is dropped, so handing over the whole cookie works
+    /// as well as handing over its value.
+    ///
     /// It is a credential: it is marked sensitive so it stays out of any
     /// header dump, and it is never printed by [`Debug`].
     #[must_use]
     pub fn new(cookie: impl Into<String>, identification: impl Into<String>) -> Self {
+        let mut cookie = cookie.into();
+
+        if cookie.starts_with(COOKIE_PREFIX) {
+            cookie.drain(..COOKIE_PREFIX.len());
+        }
+
         Self {
-            cookie: cookie.into(),
+            cookie,
             identification: identification.into(),
             timeout: DEFAULT_TIMEOUT,
         }
@@ -294,7 +306,7 @@ fn headers(options: &ClientOptions) -> Result<HeaderMap, TransportError> {
         })?,
     );
 
-    let mut cookie = HeaderValue::from_str(&format!("session={}", options.cookie))
+    let mut cookie = HeaderValue::from_str(&format!("{COOKIE_PREFIX}{}", options.cookie))
         .map_err(|_| TransportError::Cookie)?;
     cookie.set_sensitive(true);
     headers.insert(COOKIE, cookie);
@@ -390,6 +402,27 @@ mod tests {
             "{sent}"
         );
         assert!(sent.ends_with("level=1&answer=1+%2B+1"), "{sent}");
+    }
+
+    #[test]
+    fn a_cookie_handed_over_whole_is_sent_with_its_name_exactly_once() {
+        let sent = |cookie: &str| {
+            headers(&ClientOptions::new(cookie, "test-agent"))
+                .expect("valid options")
+                .get(COOKIE)
+                .expect("every request carries a cookie")
+                .to_str()
+                .expect("the cookie was built from a valid string")
+                .to_owned()
+        };
+
+        assert_eq!(sent("53616c7465645f5f"), "session=53616c7465645f5f");
+        assert_eq!(sent("session=53616c7465645f5f"), "session=53616c7465645f5f");
+        // Only the leading name is dropped; the value itself is left alone.
+        assert_eq!(
+            sent("session=session=53616c7465645f5f"),
+            "session=session=53616c7465645f5f"
+        );
     }
 
     #[test]
