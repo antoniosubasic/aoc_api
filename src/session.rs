@@ -117,8 +117,8 @@ impl Session {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Transport`] if the cookie cannot be sent in a header
-    /// or the HTTP client cannot be built.
+    /// Returns [`Error::Transport`] if the cookie or the identification cannot
+    /// be sent in a header, or the HTTP client cannot be built.
     pub fn new(cookie: &str, identification: &str) -> Result<Self, Error> {
         Self::configured(&ClientOptions::new(cookie, identification))
     }

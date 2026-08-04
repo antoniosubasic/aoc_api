@@ -220,8 +220,9 @@ impl ReqwestTransport {
     /// # Errors
     ///
     /// Returns [`TransportError::Cookie`] if the cookie cannot be sent in a
-    /// header, or [`TransportError::Client`] if the client itself cannot be
-    /// built.
+    /// header, [`TransportError::Identification`] if the caller's own
+    /// identification cannot, or [`TransportError::Client`] if the client
+    /// itself cannot be built.
     pub fn new(options: &ClientOptions) -> Result<Self, TransportError> {
         Self::from_builder(Client::builder(), options)
     }
