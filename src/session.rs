@@ -379,7 +379,7 @@ mod tests {
 
         let stars = session.stars().await.expect("the fake replies");
 
-        assert_eq!(stars.values().copied().collect::<Vec<_>>(), [0, 9, 50]);
+        assert_eq!(stars.values().copied().collect::<Vec<_>>(), [0, 9, 50, 19]);
         assert_eq!(
             session.transport().requested_urls(),
             ["https://adventofcode.com/events"]

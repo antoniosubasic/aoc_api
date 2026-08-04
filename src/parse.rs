@@ -166,10 +166,7 @@ pub fn stars(html: &str) -> Result<BTreeMap<Year, u8>, ParseError> {
     for entry in html.split("eventlist-event").skip(1) {
         let entry = entry.split_once("</div>").map_or(entry, |(head, _)| head);
 
-        let Some(year) = between(entry, "href=\"/", "\"")
-            .and_then(|year| year.parse().ok())
-            .and_then(|year| Year::new(year).ok())
-        else {
+        let Some(year) = event_year(entry) else {
             continue;
         };
 
@@ -185,6 +182,19 @@ pub fn stars(html: &str) -> Result<BTreeMap<Year, u8>, ParseError> {
     } else {
         Ok(stars)
     }
+}
+
+/// Which event one entry of the events list is for.
+fn event_year(entry: &str) -> Option<Year> {
+    [between(entry, "href=\"/", "\""), between(entry, "[", "]")]
+        .into_iter()
+        .flatten()
+        .find_map(year)
+}
+
+/// A year written out, if it is one.
+fn year(text: &str) -> Option<Year> {
+    Year::new(text.trim().parse().ok()?).ok()
 }
 
 /// What the site said in reply to a submitted answer.
@@ -606,7 +616,18 @@ mod tests {
         assert_eq!(stars.get(&Year::new(2024).expect("valid")), Some(&50));
         assert_eq!(stars.get(&Year::new(2023).expect("valid")), Some(&9));
         assert_eq!(stars.get(&Year::new(2022).expect("valid")), Some(&0));
-        assert_eq!(stars.len(), 3);
+        assert_eq!(stars.len(), 4);
+    }
+
+    #[test]
+    fn the_running_event_counts_even_though_it_links_to_the_front_page() {
+        let stars = stars(EVENTS).expect("the fixture lists events");
+
+        assert_eq!(stars.get(&Year::new(2025).expect("valid")), Some(&19));
+        assert_eq!(
+            stars.values().map(|count| u32::from(*count)).sum::<u32>(),
+            78
+        );
     }
 
     #[test]
