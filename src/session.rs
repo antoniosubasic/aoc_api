@@ -473,7 +473,7 @@ fn check(response: &Response, puzzle: Option<Puzzle>) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{http::fake::FakeTransport, parse::ParseError};
+    use crate::http::fake::FakeTransport;
 
     const PUZZLE: &str = include_str!("../tests/fixtures/puzzle-day.html");
     const EVENTS: &str = include_str!("../tests/fixtures/events.html");
