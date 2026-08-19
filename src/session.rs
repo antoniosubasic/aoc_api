@@ -163,7 +163,9 @@ impl<T: Transport> Session<T> {
     ///
     /// # Errors
     ///
-    /// As [`input_text`].
+    /// Returns [`Error::Unauthorized`] if the cookie was not accepted,
+    /// [`Error::Locked`] if the puzzle has not unlocked yet, or
+    /// [`Error::Transport`] if the request failed.
     pub async fn input_text(&self, puzzle: Puzzle) -> Result<String, Error> {
         input_text(&self.transport, puzzle).await
     }
@@ -172,7 +174,9 @@ impl<T: Transport> Session<T> {
     ///
     /// # Errors
     ///
-    /// As [`input_lines`].
+    /// Returns [`Error::Unauthorized`] if the cookie was not accepted,
+    /// [`Error::Locked`] if the puzzle has not unlocked yet, or
+    /// [`Error::Transport`] if the request failed.
     pub async fn input_lines(&self, puzzle: Puzzle) -> Result<Vec<String>, Error> {
         input_lines(&self.transport, puzzle).await
     }
@@ -181,7 +185,10 @@ impl<T: Transport> Session<T> {
     ///
     /// # Errors
     ///
-    /// As [`samples`].
+    /// Returns [`Error::Unauthorized`] if the cookie was not accepted,
+    /// [`Error::Locked`] if the puzzle has not unlocked yet, or
+    /// [`Error::Transport`] if the request failed. An unsolved puzzle still
+    /// has samples, but a locked one has no page at all.
     pub async fn samples(&self, puzzle: Puzzle) -> Result<Vec<String>, Error> {
         samples(&self.transport, puzzle).await
     }
@@ -190,7 +197,10 @@ impl<T: Transport> Session<T> {
     ///
     /// # Errors
     ///
-    /// As [`sample_text`].
+    /// Returns [`Error::Parse`] if `nth` is zero or the page has fewer sample
+    /// blocks than that, [`Error::Unauthorized`] if the cookie was not
+    /// accepted, [`Error::Locked`] if the puzzle has not unlocked yet, or
+    /// [`Error::Transport`] if the request failed.
     pub async fn sample_text(&self, puzzle: Puzzle, nth: u8) -> Result<String, Error> {
         sample_text(&self.transport, puzzle, nth).await
     }
@@ -199,7 +209,10 @@ impl<T: Transport> Session<T> {
     ///
     /// # Errors
     ///
-    /// As [`sample_lines`].
+    /// Returns [`Error::Parse`] if `nth` is zero or the page has fewer sample
+    /// blocks than that, [`Error::Unauthorized`] if the cookie was not
+    /// accepted, [`Error::Locked`] if the puzzle has not unlocked yet, or
+    /// [`Error::Transport`] if the request failed.
     pub async fn sample_lines(&self, puzzle: Puzzle, nth: u8) -> Result<Vec<String>, Error> {
         sample_lines(&self.transport, puzzle, nth).await
     }
@@ -208,7 +221,9 @@ impl<T: Transport> Session<T> {
     ///
     /// # Errors
     ///
-    /// As [`stars`].
+    /// Returns [`Error::Unauthorized`] if the cookie was not accepted,
+    /// [`Error::Parse`] if the page listed no events, or [`Error::Transport`]
+    /// if the request failed.
     pub async fn stars(&self) -> Result<BTreeMap<Year, u8>, Error> {
         stars(&self.transport).await
     }
@@ -217,7 +232,10 @@ impl<T: Transport> Session<T> {
     ///
     /// # Errors
     ///
-    /// As [`accepted_answer`].
+    /// Returns [`Error::Parse`] if that part is not solved yet,
+    /// [`Error::Unauthorized`] if the cookie was not accepted,
+    /// [`Error::Locked`] if the puzzle has not unlocked yet, or
+    /// [`Error::Transport`] if the request failed.
     pub async fn accepted_answer(&self, puzzle: Puzzle, part: Part) -> Result<String, Error> {
         accepted_answer(&self.transport, puzzle, part).await
     }
@@ -229,7 +247,11 @@ impl<T: Transport> Session<T> {
     ///
     /// # Errors
     ///
-    /// As [`submit`].
+    /// Returns [`Error::Cooldown`] if an answer was submitted too recently for
+    /// this one to be judged, [`Error::Unauthorized`] if the cookie was not
+    /// accepted, [`Error::Locked`] if the puzzle has not unlocked yet,
+    /// [`Error::Parse`] if the reply was not one this crate knows, or
+    /// [`Error::Transport`] if the request failed.
     pub async fn submit(&self, puzzle: Puzzle, part: Part, answer: &str) -> Result<Verdict, Error> {
         submit(&self.transport, puzzle, part, answer).await
     }
