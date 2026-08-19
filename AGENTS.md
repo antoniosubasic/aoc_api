@@ -42,7 +42,9 @@ parsing:
   and the only place in the crate that knows `reqwest` exists; `fn headers` is
   the only place the `User-Agent` identification and the session cookie are
   set. There are deliberately no per-call-site headers — that would be a way
-  for a request to go out unidentified.
+  for a request to go out unidentified. `&T`, `Box<T>` and `Arc<T>` forward to
+  `T`, so a caller that keeps its transport behind a pointer passes it as it
+  holds it.
 - **`http::fake`** — `FakeTransport`, a queue of canned `Response`s that also
   records every `Request`. Public on purpose: downstream tools test against it
   too. It is how this crate's own suite runs with no network and no cookie.
@@ -53,15 +55,18 @@ parsing:
   reply literally said; turning it into a `Verdict` is `session`'s job because
   two cases need a second request.
 - **`session`** — the endpoints. Each one is a free function over a
-  `&impl Transport` (`input_text`, `samples`, `stars`, `submit`, …), and
+  `&T where T: Transport` (`input_text`, `samples`, `stars`, `submit`, …), and
   `Session<T = ReqwestTransport>` is a holder for the transport whose methods
   delegate to them one line at a time. Both surfaces are public and neither
   may grow behaviour the other lacks — put logic in the function, never in the
-  method. Which puzzle a call is about is an argument, so a session serves a
-  whole event. `fn check` decides what a reply means: it asks
-  `parse::is_logged_out` **before** looking at the status, because a rejected
-  cookie arrives as a `400` from the input endpoint but as an ordinary `200`
-  page with a log-in link from the puzzle and events pages.
+  method, and `tests/api.rs` checks every pair makes the same requests. Which
+  puzzle a call is about is an argument, so a session serves a whole event.
+  `sample_text` refuses a `nth` of zero before the request, for the same
+  reason an out-of-range day never reaches the transport. `fn check` decides
+  what a reply means: it asks `parse::is_logged_out` **before** looking at the
+  status, because a rejected cookie arrives as a `400` from the input endpoint
+  but as an ordinary `200` page with a log-in link from the puzzle and events
+  pages.
 - **`error`** — `Error` is the union of the per-module typed errors
   (`TransportError`, `ParseError`, `PuzzleError`) plus the cases that only
   exist once a reply is read in context (`Unauthorized`, `Locked`, `Cooldown`,
