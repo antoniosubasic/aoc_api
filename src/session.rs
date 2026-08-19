@@ -147,7 +147,7 @@ impl Session {
     }
 }
 
-impl<T> Session<T> {
+impl<T: Transport> Session<T> {
     /// Opens a session on a transport of your own, usually
     /// [`FakeTransport`](crate::http::fake::FakeTransport) in a test.
     pub const fn with_transport(transport: T) -> Self {
@@ -158,9 +158,7 @@ impl<T> Session<T> {
     pub const fn transport(&self) -> &T {
         &self.transport
     }
-}
 
-impl<T: Transport> Session<T> {
     /// Downloads a puzzle's personal input, without its trailing newline.
     ///
     /// # Errors
