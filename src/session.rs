@@ -277,7 +277,7 @@ impl<T: Transport> Session<T> {
 /// Returns [`Error::Unauthorized`] if the cookie was not accepted,
 /// [`Error::Locked`] if the puzzle has not unlocked yet, or
 /// [`Error::Transport`] if the request failed.
-pub async fn input_text(transport: &impl Transport, puzzle: Puzzle) -> Result<String, Error> {
+pub async fn input_text<T: Transport>(transport: &T, puzzle: Puzzle) -> Result<String, Error> {
     let body = get(transport, puzzle.input_url(), Some(puzzle)).await?;
 
     Ok(body.trim_end_matches('\n').to_owned())
@@ -288,7 +288,10 @@ pub async fn input_text(transport: &impl Transport, puzzle: Puzzle) -> Result<St
 /// # Errors
 ///
 /// As [`input_text`].
-pub async fn input_lines(transport: &impl Transport, puzzle: Puzzle) -> Result<Vec<String>, Error> {
+pub async fn input_lines<T: Transport>(
+    transport: &T,
+    puzzle: Puzzle,
+) -> Result<Vec<String>, Error> {
     Ok(lines(&input_text(transport, puzzle).await?))
 }
 
@@ -298,7 +301,7 @@ pub async fn input_lines(transport: &impl Transport, puzzle: Puzzle) -> Result<V
 ///
 /// As [`input_text`]. An unsolved puzzle still has samples, but a locked one
 /// has no page at all.
-pub async fn samples(transport: &impl Transport, puzzle: Puzzle) -> Result<Vec<String>, Error> {
+pub async fn samples<T: Transport>(transport: &T, puzzle: Puzzle) -> Result<Vec<String>, Error> {
     Ok(parse::samples(&page(transport, puzzle).await?))
 }
 
@@ -308,8 +311,8 @@ pub async fn samples(transport: &impl Transport, puzzle: Puzzle) -> Result<Vec<S
 ///
 /// As [`samples`], plus [`Error::Parse`] if the page has fewer sample blocks
 /// than that, or if `nth` is zero.
-pub async fn sample_text(
-    transport: &impl Transport,
+pub async fn sample_text<T: Transport>(
+    transport: &T,
     puzzle: Puzzle,
     nth: u8,
 ) -> Result<String, Error> {
@@ -327,8 +330,8 @@ pub async fn sample_text(
 /// # Errors
 ///
 /// As [`sample_text`].
-pub async fn sample_lines(
-    transport: &impl Transport,
+pub async fn sample_lines<T: Transport>(
+    transport: &T,
     puzzle: Puzzle,
     nth: u8,
 ) -> Result<Vec<String>, Error> {
@@ -342,7 +345,7 @@ pub async fn sample_lines(
 /// Returns [`Error::Unauthorized`] if the cookie was not accepted,
 /// [`Error::Parse`] if the page listed no events, or [`Error::Transport`] if
 /// the request failed.
-pub async fn stars(transport: &impl Transport) -> Result<BTreeMap<Year, u8>, Error> {
+pub async fn stars<T: Transport>(transport: &T) -> Result<BTreeMap<Year, u8>, Error> {
     let body = get(transport, format!("{BASE_URL}/events"), None).await?;
 
     Ok(parse::stars(&body)?)
@@ -353,8 +356,8 @@ pub async fn stars(transport: &impl Transport) -> Result<BTreeMap<Year, u8>, Err
 /// # Errors
 ///
 /// As [`samples`], plus [`Error::Parse`] if that part is not solved yet.
-pub async fn accepted_answer(
-    transport: &impl Transport,
+pub async fn accepted_answer<T: Transport>(
+    transport: &T,
     puzzle: Puzzle,
     part: Part,
 ) -> Result<String, Error> {
@@ -380,8 +383,8 @@ pub async fn accepted_answer(
 /// accepted, [`Error::Locked`] if the puzzle has not unlocked yet,
 /// [`Error::Parse`] if the reply was not one this crate knows, or
 /// [`Error::Transport`] if the request failed.
-pub async fn submit(
-    transport: &impl Transport,
+pub async fn submit<T: Transport>(
+    transport: &T,
     puzzle: Puzzle,
     part: Part,
     answer: &str,
