@@ -25,6 +25,10 @@ pub enum ParseError {
         found: usize,
     },
 
+    /// A sample was asked for by an index of zero.
+    #[error("sample blocks count from one, so there is no sample 0")]
+    SampleZero,
+
     /// The puzzle page does not show an accepted answer for that part.
     #[error("the puzzle page does not show an accepted answer for {part}")]
     AcceptedAnswer {
@@ -117,18 +121,20 @@ pub fn samples(html: &str) -> Vec<String> {
 ///
 /// # Errors
 ///
-/// Returns [`ParseError::Sample`] if the page has fewer blocks than that.
+/// Returns [`ParseError::SampleZero`] if `nth` is zero, or
+/// [`ParseError::Sample`] if the page has fewer blocks than that.
 pub fn sample(html: &str, nth: u8) -> Result<String, ParseError> {
+    let index = usize::from(nth)
+        .checked_sub(1)
+        .ok_or(ParseError::SampleZero)?;
+
     let samples = samples(html);
     let found = samples.len();
 
-    usize::from(nth)
-        .checked_sub(1)
-        .and_then(|index| samples.into_iter().nth(index))
-        .ok_or(ParseError::Sample {
-            requested: nth,
-            found,
-        })
+    samples.into_iter().nth(index).ok_or(ParseError::Sample {
+        requested: nth,
+        found,
+    })
 }
 
 /// Every answer a puzzle page shows as accepted, part one first.
@@ -583,13 +589,11 @@ mod tests {
                 found: 2
             })
         );
-        assert_eq!(
-            sample(PUZZLE, 0),
-            Err(ParseError::Sample {
-                requested: 0,
-                found: 2
-            })
-        );
+    }
+
+    #[test]
+    fn there_is_no_sample_zero_because_they_count_from_one() {
+        assert_eq!(sample(PUZZLE, 0), Err(ParseError::SampleZero));
     }
 
     #[test]

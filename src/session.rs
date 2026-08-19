@@ -287,12 +287,18 @@ pub async fn samples(transport: &impl Transport, puzzle: Puzzle) -> Result<Vec<S
 /// # Errors
 ///
 /// As [`samples`], plus [`Error::Parse`] if the page has fewer sample blocks
-/// than that.
+/// than that, or if `nth` is zero.
 pub async fn sample_text(
     transport: &impl Transport,
     puzzle: Puzzle,
     nth: u8,
 ) -> Result<String, Error> {
+    // Sample blocks count from one, so no page can answer a zero and fetching
+    // one to find that out spends a request that could never have succeeded.
+    if nth == 0 {
+        return Err(ParseError::SampleZero.into());
+    }
+
     Ok(parse::sample(&page(transport, puzzle).await?, nth)?)
 }
 
@@ -505,6 +511,22 @@ mod tests {
             session.transport().requested_urls(),
             ["https://adventofcode.com/2020/day/1"]
         );
+    }
+
+    #[tokio::test]
+    async fn a_sample_zero_never_reaches_the_transport() {
+        let session = session(FakeTransport::new());
+
+        let error = session
+            .sample_text(puzzle(), 0)
+            .await
+            .expect_err("sample blocks count from one");
+
+        assert!(
+            matches!(error, Error::Parse(ParseError::SampleZero)),
+            "{error}"
+        );
+        assert!(session.transport().requests().is_empty());
     }
 
     #[tokio::test]
