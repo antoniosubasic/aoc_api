@@ -11,9 +11,11 @@ use aoc_api::{
     http::{Response, fake::FakeTransport},
     session,
 };
-use std::{sync::Arc, time::Duration};
+use std::{fmt, sync::Arc, time::Duration};
 
 const PUZZLE_PAGE: &str = include_str!("fixtures/puzzle-day.html");
+const EVENTS: &str = include_str!("fixtures/events.html");
+const ALREADY_COMPLETE: &str = include_str!("fixtures/submit-already-complete.html");
 const CORRECT: &str = include_str!("fixtures/submit-correct.html");
 const TOO_HIGH: &str = include_str!("fixtures/submit-too-high.html");
 const COOLDOWN: &str = include_str!("fixtures/submit-cooldown.html");
@@ -105,26 +107,84 @@ fn a_whole_day_can_be_solved_without_a_session_too() {
     );
 }
 
+/// Drives one endpoint through both surfaces, on transports serving the same
+/// replies, and asserts they agree on what came back and on what went out.
+fn both_ways<T: fmt::Debug>(
+    bodies: &[&str],
+    through_session: impl AsyncFnOnce(&Session<FakeTransport>) -> T,
+    directly: impl AsyncFnOnce(&FakeTransport) -> T,
+) {
+    let (queued, same) = (FakeTransport::new(), FakeTransport::new());
+    for body in bodies {
+        queued.push_body(*body);
+        same.push_body(*body);
+    }
+
+    let session = Session::with_transport(queued);
+    let from_method = block_on(through_session(&session));
+    let from_function = block_on(directly(&same));
+
+    // `Error` is not `PartialEq`, and the point is that the two are
+    // indistinguishable, so compare what they print.
+    assert_eq!(format!("{from_method:?}"), format!("{from_function:?}"));
+    assert_eq!(session.transport().requests(), same.requests());
+}
+
 /// The two surfaces are one implementation, so neither can grow a behaviour
-/// the other lacks - not a different URL, not a different error.
+/// the other lacks - not a different URL, not a different reply, not a
+/// different error. Every endpoint is checked, because prose alone would not
+/// stop a method from quietly growing a retry of its own.
 #[test]
-fn a_method_and_its_free_function_make_the_same_request() {
-    let through_session = {
-        let session = Session::with_transport(FakeTransport::serving(PUZZLE_PAGE));
-        let answer = block_on(session.accepted_answer(puzzle(), Part::Two)).expect("an answer");
+fn every_method_makes_the_same_request_as_its_free_function() {
+    let input = "1721\n979\n366\n";
 
-        (answer, session.transport().requests())
-    };
+    both_ways(
+        &[input],
+        async |session| session.input_text(puzzle()).await,
+        async |transport| session::input_text(transport, puzzle()).await,
+    );
+    both_ways(
+        &[input],
+        async |session| session.input_lines(puzzle()).await,
+        async |transport| session::input_lines(transport, puzzle()).await,
+    );
+    both_ways(
+        &[PUZZLE_PAGE],
+        async |session| session.samples(puzzle()).await,
+        async |transport| session::samples(transport, puzzle()).await,
+    );
+    both_ways(
+        &[PUZZLE_PAGE],
+        async |session| session.sample_text(puzzle(), 1).await,
+        async |transport| session::sample_text(transport, puzzle(), 1).await,
+    );
+    both_ways(
+        &[PUZZLE_PAGE],
+        async |session| session.sample_lines(puzzle(), 1).await,
+        async |transport| session::sample_lines(transport, puzzle(), 1).await,
+    );
+    both_ways(
+        &[EVENTS],
+        async |session| session.stars().await,
+        async |transport| session::stars(transport).await,
+    );
+    both_ways(
+        &[PUZZLE_PAGE],
+        async |session| session.accepted_answer(puzzle(), Part::Two).await,
+        async |transport| session::accepted_answer(transport, puzzle(), Part::Two).await,
+    );
+    both_ways(
+        &[CORRECT],
+        async |session| session.submit(puzzle(), Part::One, "514579").await,
+        async |transport| session::submit(transport, puzzle(), Part::One, "514579").await,
+    );
 
-    let directly = {
-        let transport = FakeTransport::serving(PUZZLE_PAGE);
-        let answer =
-            block_on(session::accepted_answer(&transport, puzzle(), Part::Two)).expect("an answer");
-
-        (answer, transport.requests())
-    };
-
-    assert_eq!(through_session, directly);
+    // The one call that makes two requests: both surfaces must make both.
+    both_ways(
+        &[ALREADY_COMPLETE, PUZZLE_PAGE],
+        async |session| session.submit(puzzle(), Part::Two, "241861950").await,
+        async |transport| session::submit(transport, puzzle(), Part::Two, "241861950").await,
+    );
 }
 
 /// The reason the free functions exist: a tool that keeps one transport in a
