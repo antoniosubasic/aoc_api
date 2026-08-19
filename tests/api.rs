@@ -71,13 +71,15 @@ fn a_whole_day_can_be_solved_without_touching_the_network() {
 }
 
 /// The same day again, without a `Session` anywhere: a tool that already keeps
-/// a transport of its own calls the endpoints directly.
+/// a transport of its own calls the endpoints directly. Same replies, same
+/// answers, same wrong answer in the middle - so the day reads the same on
+/// either surface.
 #[test]
 fn a_whole_day_can_be_solved_without_a_session_too() {
     let transport = FakeTransport::new();
     transport
         .push_body("1721\n979\n366\n299\n675\n1456\n")
-        .push_body(PUZZLE_PAGE)
+        .push_body(TOO_HIGH)
         .push_body(CORRECT);
 
     block_on(async {
@@ -86,22 +88,22 @@ fn a_whole_day_can_be_solved_without_a_session_too() {
             .expect("the input");
         assert_eq!(input.len(), 6);
 
-        let sample = session::sample_lines(&transport, puzzle(), 1)
-            .await
-            .expect("the first sample");
-        assert_eq!(sample[0], "1721");
-
-        let verdict = session::submit(&transport, puzzle(), Part::One, "514579")
+        let rejected = session::submit(&transport, puzzle(), Part::One, "999999")
             .await
             .expect("a judged answer");
-        assert_eq!(verdict, Verdict::Correct);
+        assert!(!rejected.is_correct());
+
+        let accepted = session::submit(&transport, puzzle(), Part::One, "514579")
+            .await
+            .expect("a judged answer");
+        assert_eq!(accepted, Verdict::Correct);
     });
 
     assert_eq!(
         transport.requested_urls(),
         [
             "https://adventofcode.com/2020/day/1/input",
-            "https://adventofcode.com/2020/day/1",
+            "https://adventofcode.com/2020/day/1/answer",
             "https://adventofcode.com/2020/day/1/answer",
         ]
     );
