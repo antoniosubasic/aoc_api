@@ -20,7 +20,7 @@ use reqwest::{
     Client,
     header::{COOKIE, HeaderMap, HeaderValue, USER_AGENT as USER_AGENT_HEADER},
 };
-use std::{error::Error, fmt, future::Future, time::Duration};
+use std::{error::Error, fmt, future::Future, sync::Arc, time::Duration};
 
 /// How long a request may take before it is abandoned.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -163,6 +163,38 @@ pub trait Transport {
         &self,
         request: Request,
     ) -> impl Future<Output = Result<Response, TransportError>> + Send;
+}
+
+/// Anything holding a transport is one, so a caller that keeps its transport
+/// behind a reference or a smart pointer - an [`Arc`] shared between tasks,
+/// say - can hand it to an endpoint as it is. Without this, inference binds
+/// the pointer itself to the `impl Transport` parameter and the caller has to
+/// reborrow it into shape.
+impl<T: Transport> Transport for &T {
+    fn execute(
+        &self,
+        request: Request,
+    ) -> impl Future<Output = Result<Response, TransportError>> + Send {
+        (**self).execute(request)
+    }
+}
+
+impl<T: Transport> Transport for Box<T> {
+    fn execute(
+        &self,
+        request: Request,
+    ) -> impl Future<Output = Result<Response, TransportError>> + Send {
+        (**self).execute(request)
+    }
+}
+
+impl<T: Transport> Transport for Arc<T> {
+    fn execute(
+        &self,
+        request: Request,
+    ) -> impl Future<Output = Result<Response, TransportError>> + Send {
+        (**self).execute(request)
+    }
 }
 
 /// Everything the one HTTP client needs to know.

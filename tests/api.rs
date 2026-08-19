@@ -11,7 +11,7 @@ use aoc_api::{
     http::{Response, fake::FakeTransport},
     session,
 };
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 const PUZZLE_PAGE: &str = include_str!("fixtures/puzzle-day.html");
 const CORRECT: &str = include_str!("fixtures/submit-correct.html");
@@ -125,6 +125,27 @@ fn a_method_and_its_free_function_make_the_same_request() {
     };
 
     assert_eq!(through_session, directly);
+}
+
+/// The reason the free functions exist: a tool that keeps one transport in a
+/// type of its own, shared between tasks, passes it as it holds it.
+#[test]
+fn a_transport_behind_a_pointer_drives_the_endpoints_as_it_is() {
+    struct Tool {
+        transport: Arc<FakeTransport>,
+    }
+
+    let tool = Tool {
+        transport: Arc::new(FakeTransport::serving("1721\n979\n366\n")),
+    };
+
+    let input = block_on(session::input_text(&tool.transport, puzzle())).expect("the input");
+
+    assert_eq!(input, "1721\n979\n366");
+    assert_eq!(
+        tool.transport.requested_urls(),
+        ["https://adventofcode.com/2020/day/1/input"]
+    );
 }
 
 #[test]
