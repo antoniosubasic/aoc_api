@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0](https://github.com/antoniosubasic/aoc_api/compare/v4.1.0...v5.0.0) - 2026-08-19
+
+### Added
+
+- implement `Transport` for references and smart pointers
+
+### Changed
+
+- reject a non-transport where the session is built
+- name the transport type parameter on the endpoints
+
+### Dependencies
+
+- *(deps)* bump h2 from 0.4.15 to 0.4.17
+
+### Documentation
+
+- say on the session methods what they can return
+
+### Fixed
+
+- keep a sample index of zero off the wire
+
 ## [4.1.0](https://github.com/antoniosubasic/aoc_api/compare/v4.0.0...v4.1.0) - 2026-08-04
 
 ### Added
