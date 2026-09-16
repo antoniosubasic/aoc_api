@@ -84,7 +84,10 @@ impl FakeTransport {
 }
 
 impl Transport for FakeTransport {
-    async fn execute(&self, request: Request) -> Result<Response, TransportError> {
+    fn execute(
+        &self,
+        request: Request,
+    ) -> impl Future<Output = Result<Response, TransportError>> + Send {
         let reply = self
             .replies
             .lock()
@@ -97,10 +100,10 @@ impl Transport for FakeTransport {
             .unwrap_or_else(PoisonError::into_inner)
             .push(request);
 
-        reply.ok_or_else(|| TransportError::Request {
+        std::future::ready(reply.ok_or_else(|| TransportError::Request {
             source: "no reply was queued for this request".into(),
             url,
-        })
+        }))
     }
 }
 
