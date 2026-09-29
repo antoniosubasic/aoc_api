@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.1](https://github.com/antoniosubasic/aoc_api/compare/v5.0.0...v5.0.1) - 2026-09-29
+
+### Changed
+
+- drop the unused `async` on the fake transport
+
+### Dependencies
+
+- *(deps)* bump reqwest from 0.13.4 to 0.13.5 in the cargo group
+- *(deps)* bump rustls from 0.23.42 to 0.23.45
+- *(deps)* bump thiserror from 2.0.20 to 2.0.21 in the cargo group
+
 ## [5.0.0](https://github.com/antoniosubasic/aoc_api/compare/v4.1.0...v5.0.0) - 2026-08-19
 
 ### Added
