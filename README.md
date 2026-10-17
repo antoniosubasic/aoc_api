@@ -278,4 +278,5 @@ generated release pull request publishes to crates.io and tags `vX.Y.Z`.
 
 ## License
 
-[GPL-3.0](LICENSE)
+[GPL-3.0-only](LICENSE) — version 3 of the GNU General Public License, and
+not any later version.
