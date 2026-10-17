@@ -240,7 +240,7 @@ fn a_coordinate_that_is_not_a_puzzle_never_reaches_the_transport() {
 
     assert!(Puzzle::at(2025, 25).is_err());
     assert!(Puzzle::at(2014, 1).is_err());
-    assert!(session.transport().requests().is_empty());
+    assert_eq!(session.transport().requests(), []);
 }
 
 #[test]

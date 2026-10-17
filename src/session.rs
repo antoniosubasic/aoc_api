@@ -549,7 +549,7 @@ mod tests {
             matches!(error, Error::Parse(ParseError::SampleZero)),
             "{error}"
         );
-        assert!(session.transport().requests().is_empty());
+        assert_eq!(session.transport().requests(), []);
     }
 
     #[tokio::test]
