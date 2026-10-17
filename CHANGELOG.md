@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.2](https://github.com/antoniosubasic/aoc_api/compare/v5.0.1...v5.0.2) - 2026-10-17
+
+### Dependencies
+
+- *(deps)* bump rustls from 0.23.45 to 0.23.46
+- *(deps)* bump tokio
+
+### Documentation
+
+- state the license as GPL-3.0 only
+
 ## [5.0.1](https://github.com/antoniosubasic/aoc_api/compare/v5.0.0...v5.0.1) - 2026-09-29
 
 ### Changed
